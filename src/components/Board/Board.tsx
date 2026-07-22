@@ -1,21 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useDroppable } from '@dnd-kit/core';
-import { Plus, Trash2 } from 'lucide-react';
-import type { BoardItem } from '../../lib/workspaceTypes';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { ArrowRightLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import type { BoardItem, WorkspaceItem } from '../../lib/workspaceTypes';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { LinkCard } from '../Card/LinkCard';
 
 interface Props {
   workspaceId: string;
   board: BoardItem;
+  workspaces: WorkspaceItem[];
 }
 
-export function Board({ workspaceId, board }: Props) {
-  const { removeBoard, renameBoard, addLink, removeLink } = useWorkspaceStore();
+export function Board({ workspaceId, board, workspaces }: Props) {
+  const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink } =
+    useWorkspaceStore();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [boardContextMenu, setBoardContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [boardMenuFlipped, setBoardMenuFlipped] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
   const boardRef = useRef<HTMLElement | null>(null);
+  const contextRef = useRef<HTMLDivElement | null>(null);
+  const renameRef = useRef<HTMLInputElement | null>(null);
 
   const { setNodeRef, isOver } = useDroppable({
     id: `board-drop-${board.id}`,
@@ -38,6 +48,42 @@ export function Board({ workspaceId, board }: Props) {
     };
   }, [showForm]);
 
+  // Close board context menu on outside click
+  useEffect(() => {
+    if (!boardContextMenu) return;
+
+    const handleClick = (e: MouseEvent) => {
+      if (contextRef.current && !contextRef.current.contains(e.target as Node)) {
+        setBoardContextMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [boardContextMenu]);
+
+  // Flip board menu upward if near bottom
+  useEffect(() => {
+    if (!boardContextMenu || !contextRef.current) return;
+
+    const menuRect = contextRef.current.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+
+    if (boardContextMenu.y + menuRect.height > viewportH - 8) {
+      setBoardMenuFlipped(true);
+    } else {
+      setBoardMenuFlipped(false);
+    }
+  }, [boardContextMenu]);
+
+  // Focus rename input
+  useEffect(() => {
+    if (isRenaming && renameRef.current) {
+      renameRef.current.focus();
+      renameRef.current.select();
+    }
+  }, [isRenaming]);
+
   const mergedRef = (node: HTMLElement | null) => {
     boardRef.current = node;
     setNodeRef(node);
@@ -53,53 +99,104 @@ export function Board({ workspaceId, board }: Props) {
     setShowForm(false);
   };
 
+  const handleBoardNameContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setBoardContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleTransfer = (targetWorkspaceId: string) => {
+    setBoardContextMenu(null);
+    transferBoard(workspaceId, targetWorkspaceId, board.id);
+  };
+
+  const handleStartRename = () => {
+    setBoardContextMenu(null);
+    setRenameValue(board.name);
+    setIsRenaming(true);
+  };
+
+  const handleCommitRename = () => {
+    if (renameValue.trim()) {
+      renameBoard(workspaceId, board.id, renameValue.trim());
+    }
+    setIsRenaming(false);
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleCommitRename();
+    if (e.key === 'Escape') setIsRenaming(false);
+  };
+
+  const handleDeleteBoard = () => {
+    setBoardContextMenu(null);
+    removeBoard(workspaceId, board.id);
+  };
+
+  const handleAddLink = () => {
+    setBoardContextMenu(null);
+    setShowForm(true);
+  };
+
+  // Other workspaces to transfer to (exclude current)
+  const otherWorkspaces = workspaces.filter((ws) => ws.id !== workspaceId);
+
   return (
     <section
       ref={mergedRef}
       className={`td-board-panel ${isOver ? 'is-over' : ''} ${showForm ? 'is-form-open' : ''}`}
     >
+      {/* Drag handle bar */}
+      <div className="td-board-drag-bar" />
+
       <div className="td-board-top">
-        <input
-          className="td-board-name"
-          value={board.name}
-          onChange={(e) => renameBoard(workspaceId, board.id, e.target.value)}
-          spellCheck={false}
-        />
-
-        <div className="td-board-top-actions">
-          <button
-            className={`td-board-icon ${showForm ? 'is-active' : ''}`}
-            type="button"
-            onClick={() => setShowForm((v) => !v)}
-            title="Add link"
-            aria-label="Add link"
+        {isRenaming ? (
+          <input
+            ref={renameRef}
+            className="td-board-name"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={handleCommitRename}
+            onKeyDown={handleRenameKeyDown}
+            spellCheck={false}
+          />
+        ) : (
+          <span
+            className="td-board-name-label"
+            onContextMenu={handleBoardNameContextMenu}
+            title="Right-click for options"
           >
-            <Plus size={20} strokeWidth={2.4} />
-          </button>
-
-          <button
-            className="td-board-icon"
-            type="button"
-            onClick={() => removeBoard(workspaceId, board.id)}
-            title="Delete board"
-            aria-label="Delete board"
-          >
-            <Trash2 size={19} strokeWidth={2.3} />
-          </button>
-        </div>
+            {board.name}
+          </span>
+        )}
       </div>
 
       <div className="td-board-links">
         {board.links.length === 0 ? (
           <div className="td-board-empty">Drop here</div>
         ) : (
-          board.links.map((link) => (
-            <LinkCard
-              key={link.id}
-              link={link}
-              onDelete={() => removeLink(workspaceId, board.id, link.id)}
-            />
-          ))
+          <SortableContext
+            items={board.links.map((l) => l.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {board.links.map((link) => (
+              <LinkCard
+                key={link.id}
+                link={link}
+                onDelete={() => removeLink(workspaceId, board.id, link.id)}
+                onRename={(newTitle) => renameLink(workspaceId, board.id, link.id, newTitle)}
+                onTransfer={(toWsId, toBoardId) => transferLink(workspaceId, board.id, link.id, toWsId, toBoardId)}
+                transferTargets={otherWorkspaces.flatMap((ws) =>
+                  ws.boards.map((b) => ({
+                    workspaceId: ws.id,
+                    workspaceName: ws.name,
+                    boardId: b.id,
+                    boardName: b.name,
+                  }))
+                )}
+              />
+            ))}
+          </SortableContext>
         )}
       </div>
 
@@ -129,6 +226,63 @@ export function Board({ workspaceId, board }: Props) {
           </div>
         </div>
       )}
+
+      {/* Board context menu — portaled to body */}
+      {boardContextMenu &&
+        createPortal(
+          <div
+            ref={contextRef}
+            className="td-link-context-menu"
+            style={
+              boardMenuFlipped
+                ? { bottom: window.innerHeight - boardContextMenu.y, left: boardContextMenu.x }
+                : { top: boardContextMenu.y, left: boardContextMenu.x }
+            }
+          >
+            <button
+              className="td-link-context-item"
+              type="button"
+              onClick={handleAddLink}
+            >
+              <Plus size={13} strokeWidth={2} />
+              <span>Add link</span>
+            </button>
+            <button
+              className="td-link-context-item"
+              type="button"
+              onClick={handleStartRename}
+            >
+              <Pencil size={13} strokeWidth={2} />
+              <span>Rename board</span>
+            </button>
+            {otherWorkspaces.length > 0 && (
+              <>
+                <div className="td-context-divider" />
+                {otherWorkspaces.map((ws) => (
+                  <button
+                    key={ws.id}
+                    className="td-link-context-item"
+                    type="button"
+                    onClick={() => handleTransfer(ws.id)}
+                  >
+                    <ArrowRightLeft size={13} strokeWidth={2} />
+                    <span>Transfer to {ws.name}</span>
+                  </button>
+                ))}
+              </>
+            )}
+            <div className="td-context-divider" />
+            <button
+              className="td-link-context-item td-link-context-delete"
+              type="button"
+              onClick={handleDeleteBoard}
+            >
+              <Trash2 size={13} strokeWidth={2} />
+              <span>Delete board</span>
+            </button>
+          </div>,
+          document.body
+        )}
     </section>
   );
 }

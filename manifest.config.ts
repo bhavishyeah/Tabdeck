@@ -1,6 +1,7 @@
 import { defineManifest } from '@crxjs/vite-plugin'
 
 export default defineManifest({
+  
   manifest_version: 3,
   name: 'TabDeck',
   version: '1.0.0',
@@ -11,7 +12,10 @@ export default defineManifest({
     service_worker: 'src/background.ts',
     type: 'module',
   },
-  permissions: ['storage', 'activeTab', 'tabs'],
+  action: {
+  default_title: 'Open TabDeck',
+},
+permissions: ['storage', 'unlimitedStorage', 'activeTab', 'tabs', 'bookmarks', 'notifications'],
   commands: {
     'quick-save-tab': {
       suggested_key: {

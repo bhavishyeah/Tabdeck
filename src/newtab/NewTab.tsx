@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -7,16 +7,107 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
+import RGL, { WidthProvider } from 'react-grid-layout';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
 import { Plus, Search } from 'lucide-react';
 import { Board } from '../components/Board/Board';
 import { Clock } from '../components/Widgets/Clock';
 import { Toolbar } from '../components/UI/Toolbar';
 import { Toast } from '../components/UI/Toast';
 import { WorkspaceTabs } from '../components/UI/WorkspaceTabs';
-import { bookmarkFolderToBoard } from '../lib/bookmarkImport';
+import { importBookmarkFolder, MAX_BOARDS_PER_WORKSPACE } from '../lib/bookmarkImport';
 import { useUiStore } from '../store/useUiStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 import '../styles/global.css';
+
+const ReactGridLayout = WidthProvider(RGL);
+
+const WORKSPACE_STORE_KEY = 'tabdeck-workspaces';
+const LEGACY_BOARD_STORE_KEY = 'tabdeck-board-store';
+const QUICK_SAVE_BOARD_KEY = 'tabdeck-quick-save-board-id';
+
+type ImportedSavedLink = {
+  id?: string;
+  title?: string;
+  url?: string;
+  favicon?: string;
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+type ImportedSavedBoard = {
+  id?: string;
+  name?: string;
+  color?: string;
+  links?: ImportedSavedLink[];
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+type ImportedSavedBoardStore = {
+  state?: {
+    boards?: ImportedSavedBoard[];
+  };
+};
+
+function storageSet(items: Record<string, unknown>) {
+  return new Promise<void>((resolve, reject) => {
+    chrome.storage.local.set(items, () => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve();
+    });
+  });
+}
+
+function storageGet(keys: string[]) {
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
+    chrome.storage.local.get(keys, (result) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(result as Record<string, unknown>);
+    });
+  });
+}
+
+function storageGetAll() {
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
+    chrome.storage.local.get(null, (result) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(result as Record<string, unknown>);
+    });
+  });
+}
+
+function normalizeImportedBoardStore(raw: unknown): ImportedSavedBoardStore | null {
+  if (!raw) return null;
+
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw) as ImportedSavedBoardStore;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof raw === 'object') {
+    return raw as ImportedSavedBoardStore;
+  }
+
+  return null;
+}
+
+function getBookmarkSubTree(id: string) {
+  return new Promise<chrome.bookmarks.BookmarkTreeNode[]>((resolve, reject) => {
+    chrome.bookmarks.getSubTree(id, (nodes) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(nodes);
+    });
+  });
+}
 
 export function NewTab() {
   const {
@@ -24,8 +115,11 @@ export function NewTab() {
     activeWorkspaceId,
     setActiveWorkspace,
     addWorkspace,
+    renameWorkspace,
+    removeWorkspace,
     addBoard,
     importBoard,
+    updateBoardLayouts,
     moveLink,
     setWorkspaceWallpaper,
     getActiveWorkspace,
@@ -34,12 +128,77 @@ export function NewTab() {
   const activeWorkspace = getActiveWorkspace();
   const { showToast } = useUiStore();
   const [search, setSearch] = useState('');
+  const [quickSaveBoardId, setQuickSaveBoardId] = useState('');
+  const [layoutLocked, setLayoutLocked] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
     })
   );
+
+  // Prevent browser zoom (Ctrl+/Ctrl-/Ctrl+wheel)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+        e.preventDefault();
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
+  useEffect(() => {
+    storageGet([QUICK_SAVE_BOARD_KEY])
+      .then((result) => {
+        if (typeof result[QUICK_SAVE_BOARD_KEY] === 'string') {
+          setQuickSaveBoardId(result[QUICK_SAVE_BOARD_KEY] as string);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!activeWorkspace) return;
+
+    const effectiveQuickSaveBoardId =
+      quickSaveBoardId || activeWorkspace.boards[0]?.id || '';
+
+    if (!effectiveQuickSaveBoardId) return;
+
+    storageSet({
+      [QUICK_SAVE_BOARD_KEY]: effectiveQuickSaveBoardId,
+    }).catch(() => {});
+  }, [quickSaveBoardId, activeWorkspace]);
+
+  useEffect(() => {
+    const onStorageChanged = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName !== 'local') return;
+
+      const next = changes[QUICK_SAVE_BOARD_KEY]?.newValue;
+      if (typeof next === 'string') {
+        setQuickSaveBoardId(next);
+      }
+    };
+
+    chrome.storage.onChanged.addListener(onStorageChanged);
+    return () => chrome.storage.onChanged.removeListener(onStorageChanged);
+  }, []);
 
   const visibleBoards = useMemo(() => {
     if (!activeWorkspace) return [];
@@ -84,11 +243,13 @@ export function NewTab() {
     const activeId = String(active.id);
     const overId = String(over.id);
 
+    if (activeId === overId) return;
+
+    // Only handle link drags (board dragging handled by react-grid-layout)
     const fromBoardId = findBoardIdByLinkId(activeId);
     if (!fromBoardId) return;
 
     let toBoardId: string | undefined;
-
     if (overId.startsWith('board-drop-')) {
       toBoardId = overId.replace('board-drop-', '');
     } else {
@@ -96,33 +257,142 @@ export function NewTab() {
     }
 
     if (!toBoardId) return;
-
     moveLink(activeWorkspace.id, activeId, overId, fromBoardId, toBoardId);
   };
 
-  const handleImportBookmarks = async () => {
+  // Generate layout for react-grid-layout (172×85 hyper-dense grid)
+  // Cell: 6×6px, margin: [4,4]. Zero leftover pixels.
+  // Width: 172×6 + 171×4 = 1716px. Height: 85×6 + 84×4 = 846px.
+  // Board w:34 = 336px. Board h:23 = 226px (fits 7 links).
+  const MAX_ROWS = 85;
+  const CELL = 6;
+  const GAP = 4;
+  const HEADER_PX = 45;
+  const LINK_PX = 26;
+
+  const getContentH = (linkCount: number) => {
+    const contentPx = HEADER_PX + linkCount * LINK_PX;
+    // Convert px to grid units: h units = ceil(contentPx / (CELL + GAP))
+    return Math.max(Math.ceil(contentPx / (CELL + GAP)), 5);
+  };
+
+  const gridLayout = useMemo(() => {
+    if (!activeWorkspace) return [];
+
+    return visibleBoards.map((board, index) => {
+      const contentH = getContentH(board.links.length);
+
+      if (board.layout) {
+        return {
+          i: board.id,
+          x: board.layout.x,
+          y: board.layout.y,
+          w: board.layout.w,
+          h: board.layout.h,
+          minW: 10,
+          minH: 5,
+        };
+      }
+
+      // Default: 5 boards per row (w:34 each, 5×34 = 170 out of 172)
+      const col = index % 5;
+      const row = Math.floor(index / 5);
+
+      return {
+        i: board.id,
+        x: col * 34 + (col > 0 ? col * 0 : 0),
+        y: row * (contentH + 2),
+        w: 34,
+        h: contentH,
+        minW: 10,
+        minH: 5,
+      };
+    });
+  }, [activeWorkspace, visibleBoards]);
+
+  const handleGridLayoutChange = (layout: RGL.Layout[]) => {
     if (!activeWorkspace) return;
 
-    const tree = await chrome.bookmarks.getTree();
-    const root = tree[0];
-    if (!root?.children) return;
+    const layouts = layout.map((item) => ({
+      id: item.i,
+      x: item.x,
+      y: Math.min(item.y, MAX_ROWS - item.h),
+      w: item.w,
+      h: item.h,
+    }));
 
-    let imported = 0;
+    updateBoardLayouts(activeWorkspace.id, layouts);
+  };
 
-    for (const node of root.children) {
-      const board = bookmarkFolderToBoard(node);
-      if (board) {
-        importBoard(activeWorkspace.id, board as any);
-        imported++;
-      }
+const handleImportBookmarks = async (folderId?: string) => {
+  if (!activeWorkspace) return;
+
+  if (!folderId || typeof folderId !== 'string') {
+    showToast('Select a valid bookmarks folder', 'error');
+    return;
+  }
+
+  try {
+    const nodes = await getBookmarkSubTree(folderId);
+    const root = nodes?.[0];
+
+    if (!root) {
+      showToast('Bookmarks folder not found', 'error');
+      return;
     }
 
-    showToast(imported > 0 ? `Imported ${imported}` : 'No links', imported > 0 ? 'success' : 'info');
-  };
+    const { boards, overflow } = importBookmarkFolder(
+      root,
+      activeWorkspace.boards.length
+    );
+
+    if (boards.length === 0 && overflow.length === 0) {
+      showToast('No bookmark links found in this folder', 'error');
+      return;
+    }
+
+    // Import boards into current workspace
+    for (const board of boards) {
+      importBoard(activeWorkspace.id, board as any);
+    }
+
+    // If overflow, create a new workspace for them
+    if (overflow.length > 0) {
+      const overflowName = `Overflow (${root.title || 'Import'})`;
+      addWorkspace(overflowName);
+
+      // Small delay to let store update, then import overflow boards
+      setTimeout(() => {
+        const state = useWorkspaceStore.getState();
+        const overflowWorkspace = state.workspaces.find(
+          (ws) => ws.name === overflowName
+        );
+        if (overflowWorkspace) {
+          for (const board of overflow) {
+            state.importBoard(overflowWorkspace.id, board as any);
+          }
+        }
+      }, 50);
+
+      const totalImported = boards.reduce((sum, b) => sum + b.links.length, 0);
+      const totalOverflow = overflow.reduce((sum, b) => sum + b.links.length, 0);
+      showToast(
+        `${totalImported} bookmarks here, ${totalOverflow} saved to "${overflowName}"`,
+        'info'
+      );
+    } else {
+      const totalImported = boards.reduce((sum, b) => sum + b.links.length, 0);
+      showToast(`${totalImported} bookmarks imported`, 'success');
+    }
+  } catch (error) {
+    console.error('Bookmarks import failed:', error);
+    showToast('Bookmarks import failed', 'error');
+  }
+};
 
   const handleExport = async () => {
     try {
-      const data = await chrome.storage.local.get(null);
+      const data = await storageGetAll();
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const blobUrl = URL.createObjectURL(blob);
@@ -145,19 +415,82 @@ export function NewTab() {
     if (!file) return;
 
     const reader = new FileReader();
+
     reader.onload = async () => {
       try {
         const result = reader.result;
         if (typeof result !== 'string') return;
 
-        const parsed = JSON.parse(result);
-        await chrome.storage.local.set(parsed);
+        const parsed = JSON.parse(result) as Record<string, unknown>;
+
+        const alreadyNewStore = parsed[WORKSPACE_STORE_KEY];
+        const legacyBoardStore = normalizeImportedBoardStore(
+          parsed[LEGACY_BOARD_STORE_KEY]
+        );
+        const legacyBoards = legacyBoardStore?.state?.boards ?? [];
+        const importedQuickSaveBoardId =
+          typeof parsed[QUICK_SAVE_BOARD_KEY] === 'string'
+            ? (parsed[QUICK_SAVE_BOARD_KEY] as string)
+            : '';
+
+        const payloadToWrite: Record<string, unknown> = { ...parsed };
+
+        if (!alreadyNewStore && legacyBoards.length > 0) {
+          const now = Date.now();
+          const workspaceId = crypto.randomUUID();
+
+          const migratedBoards = legacyBoards.map((board) => ({
+            id: String(board.id ?? crypto.randomUUID()),
+            name: board.name ?? 'New Board',
+            color: board.color ?? '',
+            links: Array.isArray(board.links)
+              ? board.links
+                  .filter((link) => !!link?.url)
+                  .map((link) => ({
+                    id: String(link.id ?? crypto.randomUUID()),
+                    title: link.title ?? link.url ?? 'Untitled',
+                    url: link.url ?? '',
+                    favicon: link.favicon ?? '',
+                    createdAt: link.createdAt ?? now,
+                    updatedAt: link.updatedAt ?? now,
+                  }))
+              : [],
+            createdAt: board.createdAt ?? now,
+            updatedAt: board.updatedAt ?? now,
+          }));
+
+          const migratedStore = {
+            state: {
+              workspaces: [
+                {
+                  id: workspaceId,
+                  name: 'Home',
+                  boards: migratedBoards,
+                  wallpaper: null,
+                  createdAt: now,
+                  updatedAt: now,
+                },
+              ],
+              activeWorkspaceId: workspaceId,
+            },
+            version: 0,
+          };
+
+          payloadToWrite[WORKSPACE_STORE_KEY] = JSON.stringify(migratedStore);
+
+          if (!importedQuickSaveBoardId && migratedBoards[0]?.id) {
+            payloadToWrite[QUICK_SAVE_BOARD_KEY] = migratedBoards[0].id;
+          }
+        }
+
+        await storageSet(payloadToWrite);
         showToast('Imported', 'success');
         setTimeout(() => window.location.reload(), 500);
       } catch {
         showToast('Invalid file', 'error');
       }
     };
+
     reader.readAsText(file);
   };
 
@@ -177,68 +510,85 @@ export function NewTab() {
 
   if (!activeWorkspace) return null;
 
+  const wallpaperUrl = activeWorkspace.wallpaper || '/tabdeck.png';
+
   return (
     <div
       className="td-page"
-      style={
-        activeWorkspace.wallpaper
-          ? {
-              backgroundImage: `url(${activeWorkspace.wallpaper})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }
-          : undefined
-      }
+      style={{
+        backgroundImage: `url(${wallpaperUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
     >
       <Toast />
 
       <div className="td-topbar">
-        <div className="td-topbar-left">
-          <WorkspaceTabs
-            workspaces={workspaces}
-            activeWorkspaceId={activeWorkspaceId}
-            onSelect={setActiveWorkspace}
-            onAdd={() => addWorkspace(`Space ${workspaces.length + 1}`)}
-          />
-        </div>
-
-        <div className="td-topbar-center">
-          <button
-            className="td-create-board-btn"
-            type="button"
-            onClick={() => addBoard(activeWorkspace.id)}
-            title="Create board"
-            aria-label="Create board"
-          >
-            <Plus size={18} strokeWidth={2.4} />
-          </button>
-
-          <div className="td-search-bar">
-            <Search size={16} strokeWidth={2.2} />
-            <input
-              className="td-search-input"
-              placeholder="Search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+        <div className="td-topbar-row">
+          <div className="td-topbar-left">
+            <WorkspaceTabs
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              onSelect={setActiveWorkspace}
+              onAdd={() => addWorkspace(`Space ${workspaces.length + 1}`)}
+              onRename={renameWorkspace}
+              onDelete={removeWorkspace}
             />
           </div>
-        </div>
 
-        <div className="td-top-actions">
-          <Clock />
-          <Toolbar
-            boards={activeWorkspace.boards as any}
-            quickSaveBoardId=""
-            setQuickSaveBoardId={() => {}}
-            onImportBookmarks={handleImportBookmarks}
-            onExport={handleExport}
-            onImportJson={handleImportBackup}
-            onWallpaper={handleWallpaper}
-            onClearWallpaper={() => {
-              setWorkspaceWallpaper(activeWorkspace.id, null);
-              showToast('Wallpaper cleared', 'info');
-            }}
-          />
+          <div className="td-topbar-center">
+            <button
+              className="td-create-board-btn"
+              type="button"
+              onClick={() => {
+                if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) {
+                  showToast('Workspace is full (max 10 boards)', 'error');
+                  return;
+                }
+                addBoard(activeWorkspace.id);
+              }}
+              title="Create board"
+              aria-label="Create board"
+            >
+              <Plus size={18} strokeWidth={2.4} />
+            </button>
+
+            <div className="td-search-bar">
+              <Search size={16} strokeWidth={2.2} />
+              <input
+                className="td-search-input"
+                placeholder="Search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="td-top-actions">
+            <button
+              className={`td-lock-btn ${layoutLocked ? 'is-locked' : ''}`}
+              type="button"
+              onClick={() => setLayoutLocked((v) => !v)}
+              title={layoutLocked ? 'Unlock layout' : 'Lock layout'}
+              aria-label={layoutLocked ? 'Unlock layout' : 'Lock layout'}
+            >
+              {layoutLocked ? '🔒' : '🔓'}
+            </button>
+            <Clock />
+            <Toolbar
+              boards={activeWorkspace.boards as any}
+              quickSaveBoardId={quickSaveBoardId}
+              setQuickSaveBoardId={setQuickSaveBoardId}
+              onImportBookmarks={handleImportBookmarks}
+              onExport={handleExport}
+              onImportJson={handleImportBackup}
+              onWallpaper={handleWallpaper}
+              onClearWallpaper={() => {
+                setWorkspaceWallpaper(activeWorkspace.id, null);
+                showToast('Wallpaper cleared', 'info');
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -258,15 +608,32 @@ export function NewTab() {
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <main className="td-board-grid">
+          <ReactGridLayout
+            className="td-board-grid"
+            layout={gridLayout}
+            cols={172}
+            rowHeight={6}
+            maxRows={85}
+            margin={[4, 4]}
+            containerPadding={[0, 0]}
+            isDraggable={!layoutLocked}
+            isResizable={!layoutLocked}
+            isBounded={true}
+            compactType={null}
+            preventCollision={true}
+            draggableHandle=".td-board-drag-bar"
+            onLayoutChange={handleGridLayoutChange}
+          >
             {visibleBoards.map((board) => (
-              <Board
-                key={board.id}
-                workspaceId={activeWorkspace.id}
-                board={board}
-              />
+              <div key={board.id}>
+                <Board
+                  workspaceId={activeWorkspace.id}
+                  board={board}
+                  workspaces={workspaces}
+                />
+              </div>
             ))}
-          </main>
+          </ReactGridLayout>
         </DndContext>
       )}
     </div>

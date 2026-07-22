@@ -1,0 +1,197 @@
+.td-live-wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Aurora — animated gradient blobs */
+.td-lw-aurora {
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+}
+
+.td-lw-aurora::before,
+.td-lw-aurora::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.6;
+  animation: td-aurora-drift 12s ease-in-out infinite alternate;
+}
+
+.td-lw-aurora::before {
+  width: 60vw;
+  height: 60vh;
+  top: -10%;
+  left: -10%;
+  background: radial-gradient(ellipse, rgba(94, 231, 223, 0.6), transparent 70%);
+}
+
+.td-lw-aurora::after {
+  width: 50vw;
+  height: 50vh;
+  bottom: -10%;
+  right: -10%;
+  background: radial-gradient(ellipse, rgba(168, 85, 247, 0.5), transparent 70%);
+  animation-delay: -6s;
+  animation-duration: 14s;
+}
+
+@keyframes td-aurora-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(8vw, 6vh) scale(1.15);
+  }
+}
+
+/* Gradient Wave — smoothly shifting hue */
+.td-lw-gradient-wave {
+  background: linear-gradient(270deg, #fc5c7d, #6a82fb, #05dfd7, #a855f7);
+  background-size: 600% 600%;
+  animation: td-gradient-shift 16s ease infinite;
+}
+
+@keyframes td-gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Particles — floating dots */
+.td-lw-particles {
+  background: linear-gradient(160deg, #0f2027, #203a43, #2c5364);
+}
+
+.td-lw-particles-container {
+  position: absolute;
+  inset: 0;
+}
+
+.td-lw-particle {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  animation: td-particle-float var(--duration) ease-in-out var(--delay) infinite alternate;
+}
+
+@keyframes td-particle-float {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(-80px) scale(1.3);
+    opacity: 0.9;
+  }
+}
+
+/* Mesh Gradient — organic animated blobs */
+.td-lw-mesh-gradient {
+  background: #1a1a2e;
+}
+
+.td-lw-mesh-gradient::before,
+.td-lw-mesh-gradient::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.7;
+}
+
+.td-lw-mesh-gradient::before {
+  width: 45vw;
+  height: 45vw;
+  top: 10%;
+  left: 20%;
+  background: radial-gradient(circle, rgba(255, 107, 107, 0.6), transparent 70%);
+  animation: td-mesh-move-1 10s ease-in-out infinite alternate;
+}
+
+.td-lw-mesh-gradient::after {
+  width: 40vw;
+  height: 40vw;
+  bottom: 10%;
+  right: 15%;
+  background: radial-gradient(circle, rgba(78, 205, 196, 0.5), transparent 70%);
+  animation: td-mesh-move-2 12s ease-in-out infinite alternate;
+}
+
+@keyframes td-mesh-move-1 {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate(5vw, -5vh) rotate(20deg);
+  }
+}
+
+@keyframes td-mesh-move-2 {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate(-4vw, 4vh) rotate(-15deg);
+  }
+}
+
+/* Ocean — layered wave animation */
+.td-lw-ocean {
+  background: linear-gradient(180deg, #1a3a4a 0%, #0a1628 100%);
+}
+
+.td-lw-ocean::before,
+.td-lw-ocean::after {
+  content: '';
+  position: absolute;
+  left: -10%;
+  width: 120%;
+  height: 40%;
+  border-radius: 40%;
+  opacity: 0.4;
+}
+
+.td-lw-ocean::before {
+  bottom: -5%;
+  background: linear-gradient(0deg, rgba(56, 189, 248, 0.5), transparent);
+  animation: td-ocean-wave 8s ease-in-out infinite;
+}
+
+.td-lw-ocean::after {
+  bottom: -15%;
+  background: linear-gradient(0deg, rgba(14, 165, 233, 0.4), transparent);
+  animation: td-ocean-wave 10s ease-in-out 2s infinite;
+}
+
+@keyframes td-ocean-wave {
+  0%, 100% {
+    transform: translateX(0) translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateX(3%) translateY(-10px) rotate(1deg);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .td-live-wallpaper,
+  .td-live-wallpaper::before,
+  .td-live-wallpaper::after,
+  .td-lw-particle {
+    animation: none !important;
+  }
+}

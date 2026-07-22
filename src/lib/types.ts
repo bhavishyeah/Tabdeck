@@ -1,9 +1,9 @@
-export interface LinkCardType {
+export type LinkCardType = {
   id: string;
   title: string;
   url: string;
-  faviconUrl?: string;
-}
+  favicon?: string;
+};
 
 export interface BoardType {
   id: string;
