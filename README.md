@@ -1,75 +1,56 @@
-# React + TypeScript + Vite
+# TabDeck — Bento Grid New Tab Extension
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A Chrome extension that replaces your new tab with a beautiful, draggable bento-grid bookmark manager.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Bento Grid Layout** — drag and resize boards like widgets on a dense grid
+- **Workspaces** — organize boards into separate workspaces
+- **Bookmark Import** — import Chrome bookmark folders, auto-split into boards
+- **Live GIF Wallpapers** — upload animated GIFs as backgrounds
+- **Glass UI** — transparent blur toolbar that inherits wallpaper colors
+- **Context Menus** — right-click to rename, delete, or transfer links/boards
+- **Layout Lock** — lock your layout to prevent accidental moves
+- **Zoom Protection** — Ctrl+/- is blocked to prevent layout misalignment
+- **Transfer** — move boards or individual links between workspaces
+- **Search** — filter boards and links instantly
+- **Quick Save** — keyboard shortcut (Ctrl+Shift+Y) to save current tab
 
-## React Compiler
+## Install (from GitHub)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Download the latest release zip from [Releases](https://github.com/bhavishyeah/Tabdeck/releases)
+   - Or download `release/tabdeck-v2.0.0.zip` directly from the repo
+2. Unzip the file
+3. Open Chrome → go to `chrome://extensions`
+4. Enable **Developer mode** (toggle in top-right)
+5. Click **Load unpacked**
+6. Select the unzipped folder (the `dist` folder contents)
+7. Open a new tab — TabDeck is ready!
 
-## Expanding the ESLint configuration
+## Development
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```bash
+# Install dependencies
+npm install
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Dev mode (hot reload)
+npm run dev
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+# Build for production
+npm run build
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+# The built extension is in the /dist folder
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Tech Stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- React 19 + TypeScript
+- Vite + CRXJS (Chrome Extension plugin)
+- react-grid-layout (bento grid)
+- @dnd-kit (link drag & drop)
+- Zustand (state management)
+- Lucide icons
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## License
 
-```
+MIT
