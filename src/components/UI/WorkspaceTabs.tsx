@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { WorkspaceItem } from '../../lib/workspaceTypes';
 
 interface Props {
@@ -96,6 +96,27 @@ export function WorkspaceTabs({
     setContextMenu(null);
   };
 
+  const handleShareWorkspace = () => {
+    if (!contextMenu) return;
+
+    const ws = workspaces.find((w) => w.id === contextMenu.workspaceId);
+    if (!ws) return;
+
+    const exportData = JSON.stringify(ws, null, 2);
+    const blob = new Blob([exportData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tabdeck-workspace-${ws.name.replace(/\s+/g, '-').toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    setContextMenu(null);
+  };
+
   return (
     <>
       <div className="td-workspace-tabs" role="tablist" aria-label="Workspaces">
@@ -157,6 +178,15 @@ export function WorkspaceTabs({
               <Pencil size={13} strokeWidth={2} />
               <span>Rename workspace</span>
             </button>
+            <button
+              className="td-link-context-item"
+              type="button"
+              onClick={handleShareWorkspace}
+            >
+              <Download size={13} strokeWidth={2} />
+              <span>Export workspace</span>
+            </button>
+            <div className="td-context-divider" />
             <button
               className="td-link-context-item td-link-context-delete"
               type="button"

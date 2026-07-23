@@ -294,7 +294,7 @@ export function Toolbar({
         <input
           ref={wallpaperRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/mp4,video/webm"
           hidden
           onChange={(e) => onWallpaper(e.target.files?.[0])}
         />

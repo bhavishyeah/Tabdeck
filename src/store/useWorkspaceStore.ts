@@ -19,6 +19,7 @@ const createWorkspace = (name = 'Home'): WorkspaceItem => ({
   name,
   boards: [],
   wallpaper: null,
+  videoWallpaper: null,
   liveWallpaper: null,
   createdAt: now(),
   updatedAt: now(),
@@ -45,7 +46,10 @@ interface WorkspaceState {
   renameWorkspace: (workspaceId: string, name: string) => void;
   removeWorkspace: (workspaceId: string) => void;
   addBoard: (workspaceId: string, name?: string) => void;
+  addNoteBoard: (workspaceId: string, name?: string) => void;
+  updateNoteContent: (workspaceId: string, boardId: string, content: string) => void;
   renameBoard: (workspaceId: string, boardId: string, name: string) => void;
+  setBoardColor: (workspaceId: string, boardId: string, color: string | undefined) => void;
   removeBoard: (workspaceId: string, boardId: string) => void;
   transferBoard: (fromWorkspaceId: string, toWorkspaceId: string, boardId: string) => void;
   reorderBoards: (workspaceId: string, fromIndex: number, toIndex: number) => void;
@@ -54,6 +58,7 @@ interface WorkspaceState {
   addLink: (workspaceId: string, boardId: string, title: string, url: string) => void;
   renameLink: (workspaceId: string, boardId: string, linkId: string, title: string) => void;
   transferLink: (fromWorkspaceId: string, fromBoardId: string, linkId: string, toWorkspaceId: string, toBoardId: string) => void;
+  reorderLinks: (workspaceId: string, boardId: string, fromIndex: number, toIndex: number) => void;
   removeLink: (workspaceId: string, boardId: string, linkId: string) => void;
   moveLink: (
     workspaceId: string,
@@ -63,6 +68,7 @@ interface WorkspaceState {
     toBoardId: string
   ) => void;
   setWorkspaceWallpaper: (workspaceId: string, wallpaper: string | null) => void;
+  setVideoWallpaper: (workspaceId: string, videoKey: string | null) => void;
   setWorkspaceLiveWallpaper: (workspaceId: string, liveWallpaper: LiveWallpaperType) => void;
   getActiveWorkspace: () => WorkspaceItem | undefined;
 }
@@ -127,6 +133,36 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           }),
         })),
 
+      addNoteBoard: (workspaceId, name = 'Note') =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) => {
+            if (workspace.id !== workspaceId) return workspace;
+            if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            return {
+              ...workspace,
+              boards: [...workspace.boards, { ...createBoard(name), type: 'note' as const, noteContent: '' }],
+              updatedAt: now(),
+            };
+          }),
+        })),
+
+      updateNoteContent: (workspaceId, boardId, content) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, noteContent: content, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
       renameBoard: (workspaceId, boardId, name) =>
         set((state) => ({
           workspaces: state.workspaces.map((workspace) =>
@@ -136,6 +172,23 @@ export const useWorkspaceStore = create<WorkspaceState>()(
                   boards: workspace.boards.map((board) =>
                     board.id === boardId
                       ? { ...board, name, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
+      setBoardColor: (workspaceId, boardId, color) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, color, updatedAt: now() }
                       : board
                   ),
                   updatedAt: now(),
@@ -324,6 +377,25 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           };
         }),
 
+      reorderLinks: (workspaceId, boardId, fromIndex, toIndex) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) => {
+                    if (board.id !== boardId) return board;
+                    const links = [...board.links];
+                    const [moved] = links.splice(fromIndex, 1);
+                    links.splice(toIndex, 0, moved);
+                    return { ...board, links, updatedAt: Date.now() };
+                  }),
+                  updatedAt: Date.now(),
+                }
+              : workspace
+          ),
+        })),
+
       removeLink: (workspaceId, boardId, linkId) =>
         set((state) => ({
           workspaces: state.workspaces.map((workspace) =>
@@ -400,7 +472,16 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set((state) => ({
           workspaces: state.workspaces.map((workspace) =>
             workspace.id === workspaceId
-              ? { ...workspace, wallpaper, liveWallpaper: null, updatedAt: now() }
+              ? { ...workspace, wallpaper, liveWallpaper: null, videoWallpaper: null, updatedAt: now() }
+              : workspace
+          ),
+        })),
+
+      setVideoWallpaper: (workspaceId, videoKey) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? { ...workspace, videoWallpaper: videoKey, wallpaper: null, liveWallpaper: null, updatedAt: now() }
               : workspace
           ),
         })),
@@ -409,7 +490,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set((state) => ({
           workspaces: state.workspaces.map((workspace) =>
             workspace.id === workspaceId
-              ? { ...workspace, liveWallpaper, wallpaper: null, updatedAt: now() }
+              ? { ...workspace, liveWallpaper, wallpaper: null, videoWallpaper: null, updatedAt: now() }
               : workspace
           ),
         })),

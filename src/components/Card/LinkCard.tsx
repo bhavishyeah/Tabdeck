@@ -195,7 +195,7 @@ export function LinkCard({ link, onDelete, onRename, onTransfer, transferTargets
             {transferTargets.length > 0 && (
               <>
                 <div className="td-context-divider" />
-                <div className="td-context-section-label">Transfer to</div>
+                <div className="td-context-section-label">Transfer to workspace</div>
                 <div className="td-context-scroll">
                   {transferTargets.map((target) => (
                     <button

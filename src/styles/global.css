@@ -50,6 +50,7 @@ button {
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
+  position: relative;
 }
 
 .td-topbar {
@@ -357,6 +358,7 @@ button {
 
 .td-board-grid {
   position: relative;
+  z-index: 1;
 }
 
 .td-board-grid > * {
@@ -422,7 +424,7 @@ button {
   background: transparent;
   font-size: 12px;
   font-weight: 700;
-  color: #111;
+  color: inherit;
   text-align: left;
 }
 
@@ -430,7 +432,7 @@ button {
   width: 100%;
   font-size: 12px;
   font-weight: 700;
-  color: #111;
+  color: inherit;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -494,7 +496,7 @@ button {
   padding: 2px 1px;
   border-radius: 6px;
   background: transparent;
-  color: var(--td-text);
+  color: inherit;
   user-select: none;
   transition: background 120ms ease;
 }
@@ -545,7 +547,7 @@ button {
   white-space: nowrap;
   font-size: 10px;
   font-weight: 400;
-  color: #111;
+  color: inherit !important;
   text-decoration: none;
   cursor: pointer;
   flex: 1;
@@ -554,7 +556,7 @@ button {
 
 .td-link-name:hover {
   text-decoration: underline;
-  color: #2563eb;
+  opacity: 0.8;
 }
 
 .td-board-bottom {
@@ -656,6 +658,8 @@ button {
   min-height: calc(100vh - 180px);
   display: grid;
   place-items: center;
+  position: relative;
+  z-index: 1;
 }
 
 .td-create-first {
@@ -762,6 +766,7 @@ button {
   padding: 0px 6px 8px 6px;
   background: rgba(250, 248, 244, 0.92);
   border-radius: 14px;
+  color: #111;
 }
 
 .td-board-empty {
@@ -1238,4 +1243,72 @@ button {
   max-height: 140px;
   overflow-y: auto;
   scrollbar-width: thin;
+}
+
+
+/* Video wallpaper */
+.td-video-wallpaper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+}
+
+
+/* Board color picks */
+.td-board-color-picks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 6px;
+}
+
+.td-board-color-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.td-board-color-dot:hover {
+  transform: scale(1.2);
+}
+
+.td-board-color-dot.is-active {
+  border-color: #111;
+  transform: scale(1.15);
+}
+
+
+/* Note board textarea */
+.td-note-textarea {
+  width: 100%;
+  flex: 1;
+  min-height: 60px;
+  padding: 6px 8px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.5;
+  resize: none;
+  scrollbar-width: none;
+}
+
+.td-note-textarea::placeholder {
+  color: inherit;
+  opacity: 0.4;
+}
+
+.td-note-textarea::-webkit-scrollbar {
+  display: none;
 }

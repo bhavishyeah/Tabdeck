@@ -9,6 +9,9 @@ export interface LinkItem {
 export interface BoardItem {
   id: string;
   name: string;
+  type?: 'links' | 'note';
+  color?: string;
+  noteContent?: string;
   links: LinkItem[];
   layout?: { x: number; y: number; w: number; h: number };
   createdAt: number;
@@ -28,6 +31,7 @@ export interface WorkspaceItem {
   name: string;
   boards: BoardItem[];
   wallpaper: string | null;
+  videoWallpaper: string | null;
   liveWallpaper: LiveWallpaperType;
   createdAt: number;
   updatedAt: number;

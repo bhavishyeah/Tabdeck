@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function Board({ workspaceId, board, workspaces }: Props) {
-  const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink } =
+  const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink, setBoardColor, updateNoteContent } =
     useWorkspaceStore();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
@@ -145,6 +145,7 @@ export function Board({ workspaceId, board, workspaces }: Props) {
     <section
       ref={mergedRef}
       className={`td-board-panel ${isOver ? 'is-over' : ''} ${showForm ? 'is-form-open' : ''}`}
+      style={board.color ? { background: `${board.color}80`, borderColor: `${board.color}aa`, color: '#fff' } : undefined}
     >
       {/* Drag handle bar */}
       <div className="td-board-drag-bar" />
@@ -171,36 +172,46 @@ export function Board({ workspaceId, board, workspaces }: Props) {
         )}
       </div>
 
-      <div className="td-board-links">
-        {board.links.length === 0 ? (
-          <div className="td-board-empty">Drop here</div>
-        ) : (
-          <SortableContext
-            items={board.links.map((l) => l.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {board.links.map((link) => (
-              <LinkCard
-                key={link.id}
-                link={link}
-                onDelete={() => removeLink(workspaceId, board.id, link.id)}
-                onRename={(newTitle) => renameLink(workspaceId, board.id, link.id, newTitle)}
-                onTransfer={(toWsId, toBoardId) => transferLink(workspaceId, board.id, link.id, toWsId, toBoardId)}
-                transferTargets={otherWorkspaces.flatMap((ws) =>
-                  ws.boards.map((b) => ({
-                    workspaceId: ws.id,
-                    workspaceName: ws.name,
-                    boardId: b.id,
-                    boardName: b.name,
-                  }))
-                )}
-              />
-            ))}
-          </SortableContext>
-        )}
-      </div>
+      {board.type === 'note' ? (
+        <textarea
+          className="td-note-textarea"
+          value={board.noteContent || ''}
+          onChange={(e) => updateNoteContent(workspaceId, board.id, e.target.value)}
+          placeholder="Write your note here..."
+          spellCheck={false}
+        />
+      ) : (
+        <div className="td-board-links">
+          {board.links.length === 0 ? (
+            <div className="td-board-empty">Drop here</div>
+          ) : (
+            <SortableContext
+              items={board.links.map((l) => l.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {board.links.map((link) => (
+                <LinkCard
+                  key={link.id}
+                  link={link}
+                  onDelete={() => removeLink(workspaceId, board.id, link.id)}
+                  onRename={(newTitle) => renameLink(workspaceId, board.id, link.id, newTitle)}
+                  onTransfer={(toWsId, toBoardId) => transferLink(workspaceId, board.id, link.id, toWsId, toBoardId)}
+                  transferTargets={otherWorkspaces.flatMap((ws) =>
+                    ws.boards.map((b) => ({
+                      workspaceId: ws.id,
+                      workspaceName: ws.name,
+                      boardId: b.id,
+                      boardName: b.name,
+                    }))
+                  )}
+                />
+              ))}
+            </SortableContext>
+          )}
+        </div>
+      )}
 
-      {showForm && (
+      {showForm && board.type !== 'note' && (
         <div className="td-floating-add-panel">
           <div className="td-add-form">
             <input
@@ -255,6 +266,23 @@ export function Board({ workspaceId, board, workspaces }: Props) {
               <Pencil size={13} strokeWidth={2} />
               <span>Rename board</span>
             </button>
+            <div className="td-context-divider" />
+            <div className="td-context-section-label">Color</div>
+            <div className="td-board-color-picks">
+              {['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'].map((c) => (
+                <button
+                  key={c}
+                  className={`td-board-color-dot ${board.color === c || (!board.color && c === '') ? 'is-active' : ''}`}
+                  type="button"
+                  style={{ background: c || 'rgba(250,248,244,0.92)' }}
+                  onClick={() => {
+                    setBoardColor(workspaceId, board.id, c || undefined);
+                    setBoardContextMenu(null);
+                  }}
+                  title={c || 'Default'}
+                />
+              ))}
+            </div>
             {otherWorkspaces.length > 0 && (
               <>
                 <div className="td-context-divider" />

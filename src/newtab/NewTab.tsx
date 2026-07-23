@@ -10,13 +10,14 @@ import {
 import RGL, { WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, StickyNote } from 'lucide-react';
 import { Board } from '../components/Board/Board';
 import { Clock } from '../components/Widgets/Clock';
 import { Toolbar } from '../components/UI/Toolbar';
 import { Toast } from '../components/UI/Toast';
 import { WorkspaceTabs } from '../components/UI/WorkspaceTabs';
 import { importBookmarkFolder, MAX_BOARDS_PER_WORKSPACE } from '../lib/bookmarkImport';
+import { storeVideoBlob, deleteVideoBlob, getVideoBlob } from '../lib/videoStorage';
 import { useUiStore } from '../store/useUiStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 import '../styles/global.css';
@@ -122,6 +123,7 @@ export function NewTab() {
     updateBoardLayouts,
     moveLink,
     setWorkspaceWallpaper,
+    setVideoWallpaper,
     getActiveWorkspace,
   } = useWorkspaceStore();
 
@@ -137,11 +139,36 @@ export function NewTab() {
     })
   );
 
-  // Prevent browser zoom (Ctrl+/Ctrl-/Ctrl+wheel)
+  // Prevent browser zoom + keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent zoom
       if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
         e.preventDefault();
+      }
+
+      // Ctrl+B — create new board
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'b') {
+        e.preventDefault();
+        const ws = useWorkspaceStore.getState().getActiveWorkspace();
+        if (ws && ws.boards.length < MAX_BOARDS_PER_WORKSPACE) {
+          useWorkspaceStore.getState().addBoard(ws.id);
+        }
+      }
+
+      // Ctrl+Shift+B — create new note
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'B') {
+        e.preventDefault();
+        const ws = useWorkspaceStore.getState().getActiveWorkspace();
+        if (ws && ws.boards.length < MAX_BOARDS_PER_WORKSPACE) {
+          useWorkspaceStore.getState().addNoteBoard(ws.id);
+        }
+      }
+
+      // Ctrl+M — toggle layout lock
+      if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+        e.preventDefault();
+        setLayoutLocked((v) => !v);
       }
     };
 
@@ -245,10 +272,11 @@ export function NewTab() {
 
     if (activeId === overId) return;
 
-    // Only handle link drags (board dragging handled by react-grid-layout)
+    // Find which board the dragged link belongs to
     const fromBoardId = findBoardIdByLinkId(activeId);
     if (!fromBoardId) return;
 
+    // Determine the target board
     let toBoardId: string | undefined;
     if (overId.startsWith('board-drop-')) {
       toBoardId = overId.replace('board-drop-', '');
@@ -257,6 +285,20 @@ export function NewTab() {
     }
 
     if (!toBoardId) return;
+
+    // Same board — reorder
+    if (fromBoardId === toBoardId) {
+      const board = activeWorkspace.boards.find((b) => b.id === fromBoardId);
+      if (!board) return;
+      const fromIndex = board.links.findIndex((l) => l.id === activeId);
+      const toIndex = board.links.findIndex((l) => l.id === overId);
+      if (fromIndex !== -1 && toIndex !== -1) {
+        useWorkspaceStore.getState().reorderLinks(activeWorkspace.id, fromBoardId, fromIndex, toIndex);
+      }
+      return;
+    }
+
+    // Different board — move
     moveLink(activeWorkspace.id, activeId, overId, fromBoardId, toBoardId);
   };
 
@@ -494,33 +536,108 @@ const handleImportBookmarks = async (folderId?: string) => {
     reader.readAsText(file);
   };
 
-  const handleWallpaper = (file?: File) => {
+  const [videoObjectUrl, setVideoObjectUrl] = useState<string | null>(null);
+
+  // Load video wallpaper from IndexedDB on mount/workspace change
+  useEffect(() => {
+    if (!activeWorkspace?.videoWallpaper) {
+      setVideoObjectUrl(null);
+      return;
+    }
+
+    let url: string | null = null;
+
+    getVideoBlob(activeWorkspace.videoWallpaper)
+      .then((blob) => {
+        if (blob) {
+          url = URL.createObjectURL(blob);
+          setVideoObjectUrl(url);
+        }
+      })
+      .catch(() => setVideoObjectUrl(null));
+
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [activeWorkspace?.videoWallpaper]);
+
+  const handleWallpaper = async (file?: File) => {
     if (!file || !activeWorkspace) return;
 
+    // Video files → store in IndexedDB + create object URL for immediate playback
+    if (file.type.startsWith('video/')) {
+      try {
+        const videoKey = `video-${activeWorkspace.id}`;
+        await storeVideoBlob(videoKey, file);
+        setVideoWallpaper(activeWorkspace.id, videoKey);
+        // Create immediate object URL for playback
+        const url = URL.createObjectURL(file);
+        setVideoObjectUrl(url);
+        showToast('Video wallpaper applied', 'success');
+      } catch (err) {
+        console.error('Failed to store video:', err);
+        showToast('Failed to apply video wallpaper', 'error');
+      }
+      return;
+    }
+
+    // Image/GIF → store as data URL
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result;
       if (typeof result === 'string') {
         setWorkspaceWallpaper(activeWorkspace.id, result);
+        setVideoObjectUrl(null);
         showToast('Wallpaper updated', 'success');
       }
     };
     reader.readAsDataURL(file);
   };
 
+  const handleClearWallpaper = async () => {
+    if (!activeWorkspace) return;
+
+    if (activeWorkspace.videoWallpaper) {
+      await deleteVideoBlob(activeWorkspace.videoWallpaper).catch(() => {});
+    }
+
+    setWorkspaceWallpaper(activeWorkspace.id, null);
+    setVideoWallpaper(activeWorkspace.id, null);
+    if (videoObjectUrl) {
+      URL.revokeObjectURL(videoObjectUrl);
+      setVideoObjectUrl(null);
+    }
+    showToast('Wallpaper cleared', 'info');
+  };
+
   if (!activeWorkspace) return null;
 
-  const wallpaperUrl = activeWorkspace.wallpaper || '/tabdeck.png';
+  const hasVideoWallpaper = !!videoObjectUrl;
+  const wallpaperUrl = hasVideoWallpaper ? undefined : (activeWorkspace.wallpaper || '/tabdeck.png');
 
   return (
     <div
       className="td-page"
-      style={{
-        backgroundImage: `url(${wallpaperUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
+      style={
+        wallpaperUrl
+          ? {
+              backgroundImage: `url(${wallpaperUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }
+          : { backgroundColor: '#0a0a0a' }
+      }
     >
+      {hasVideoWallpaper && (
+        <video
+          className="td-video-wallpaper"
+          src={videoObjectUrl}
+          autoPlay
+          loop
+          muted
+          playsInline
+        />
+      )}
       <Toast />
 
       <div className="td-topbar">
@@ -547,10 +664,26 @@ const handleImportBookmarks = async (folderId?: string) => {
                 }
                 addBoard(activeWorkspace.id);
               }}
-              title="Create board"
+              title="Create board (Ctrl+B)"
               aria-label="Create board"
             >
               <Plus size={18} strokeWidth={2.4} />
+            </button>
+
+            <button
+              className="td-create-board-btn"
+              type="button"
+              onClick={() => {
+                if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) {
+                  showToast('Workspace is full (max 10 boards)', 'error');
+                  return;
+                }
+                useWorkspaceStore.getState().addNoteBoard(activeWorkspace.id);
+              }}
+              title="Create note (Ctrl+Shift+B)"
+              aria-label="Create note"
+            >
+              <StickyNote size={16} strokeWidth={2.2} />
             </button>
 
             <div className="td-search-bar">
@@ -583,10 +716,7 @@ const handleImportBookmarks = async (folderId?: string) => {
               onExport={handleExport}
               onImportJson={handleImportBackup}
               onWallpaper={handleWallpaper}
-              onClearWallpaper={() => {
-                setWorkspaceWallpaper(activeWorkspace.id, null);
-                showToast('Wallpaper cleared', 'info');
-              }}
+              onClearWallpaper={handleClearWallpaper}
             />
           </div>
         </div>
