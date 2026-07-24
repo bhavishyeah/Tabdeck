@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { ArrowRightLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { BoardItem, WorkspaceItem } from '../../lib/workspaceTypes';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { LinkCard } from '../Card/LinkCard';
+import { TodoBoardContent } from '../Widgets/TodoBoard';
+import { WeatherWidget } from '../Widgets/WeatherWidget';
 
 interface Props {
   workspaceId: string;
@@ -14,7 +16,7 @@ interface Props {
 }
 
 export function Board({ workspaceId, board, workspaces }: Props) {
-  const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink, setBoardColor, updateNoteContent } =
+  const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink, setBoardColor, updateNoteContent, updateTodos, duplicateBoard } =
     useWorkspaceStore();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
@@ -133,6 +135,11 @@ export function Board({ workspaceId, board, workspaces }: Props) {
     removeBoard(workspaceId, board.id);
   };
 
+  const handleDuplicate = () => {
+    setBoardContextMenu(null);
+    duplicateBoard(workspaceId, board.id);
+  };
+
   const handleAddLink = () => {
     setBoardContextMenu(null);
     setShowForm(true);
@@ -180,6 +187,13 @@ export function Board({ workspaceId, board, workspaces }: Props) {
           placeholder="Write your note here..."
           spellCheck={false}
         />
+      ) : board.type === 'todo' ? (
+        <TodoBoardContent
+          todos={board.todos || []}
+          onChange={(todos) => updateTodos(workspaceId, board.id, todos)}
+        />
+      ) : board.type === 'weather' ? (
+        <WeatherWidget />
       ) : (
         <div className="td-board-links">
           {board.links.length === 0 ? (
@@ -283,6 +297,14 @@ export function Board({ workspaceId, board, workspaces }: Props) {
                 />
               ))}
             </div>
+            <button
+              className="td-link-context-item"
+              type="button"
+              onClick={handleDuplicate}
+            >
+              <Copy size={13} strokeWidth={2} />
+              <span>Duplicate board</span>
+            </button>
             {otherWorkspaces.length > 0 && (
               <>
                 <div className="td-context-divider" />

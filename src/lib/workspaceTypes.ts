@@ -6,12 +6,19 @@ export interface LinkItem {
   updatedAt: number;
 }
 
+export interface TodoItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface BoardItem {
   id: string;
   name: string;
-  type?: 'links' | 'note';
+  type?: 'links' | 'note' | 'todo' | 'weather';
   color?: string;
   noteContent?: string;
+  todos?: TodoItem[];
   links: LinkItem[];
   layout?: { x: number; y: number; w: number; h: number };
   createdAt: number;

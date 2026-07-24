@@ -10,14 +10,16 @@ import {
 import RGL, { WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { Plus, Search, StickyNote } from 'lucide-react';
+import { CheckSquare, CloudSun, Plus, Search, StickyNote } from 'lucide-react';
 import { Board } from '../components/Board/Board';
 import { Clock } from '../components/Widgets/Clock';
 import { Toolbar } from '../components/UI/Toolbar';
 import { Toast } from '../components/UI/Toast';
+import { Onboarding } from '../components/UI/Onboarding';
 import { WorkspaceTabs } from '../components/UI/WorkspaceTabs';
 import { importBookmarkFolder, MAX_BOARDS_PER_WORKSPACE } from '../lib/bookmarkImport';
 import { storeVideoBlob, deleteVideoBlob, getVideoBlob } from '../lib/videoStorage';
+import { pushState, undo, redo } from '../lib/undoManager';
 import { useUiStore } from '../store/useUiStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 import '../styles/global.css';
@@ -132,6 +134,9 @@ export function NewTab() {
   const [search, setSearch] = useState('');
   const [quickSaveBoardId, setQuickSaveBoardId] = useState('');
   const [layoutLocked, setLayoutLocked] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem('tabdeck-onboarding-done');
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -141,10 +146,43 @@ export function NewTab() {
 
   // Prevent browser zoom + keyboard shortcuts
   useEffect(() => {
+    // Push initial state for undo
+    const state = useWorkspaceStore.getState();
+    pushState({ workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId });
+
+    // Subscribe to state changes for undo stack
+    const unsub = useWorkspaceStore.subscribe((state) => {
+      pushState({ workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId });
+    });
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Prevent zoom
       if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
         e.preventDefault();
+      }
+
+      // Ctrl+Z — undo
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        const prev = undo() as { workspaces: any[]; activeWorkspaceId: string } | null;
+        if (prev) {
+          useWorkspaceStore.setState({
+            workspaces: prev.workspaces,
+            activeWorkspaceId: prev.activeWorkspaceId,
+          });
+        }
+      }
+
+      // Ctrl+Shift+Z — redo
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        const next = redo() as { workspaces: any[]; activeWorkspaceId: string } | null;
+        if (next) {
+          useWorkspaceStore.setState({
+            workspaces: next.workspaces,
+            activeWorkspaceId: next.activeWorkspaceId,
+          });
+        }
       }
 
       // Ctrl+B — create new board
@@ -182,6 +220,7 @@ export function NewTab() {
     document.addEventListener('wheel', handleWheel, { passive: false });
 
     return () => {
+      unsub();
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('wheel', handleWheel);
     };
@@ -336,13 +375,13 @@ export function NewTab() {
         };
       }
 
-      // Default: 5 boards per row (w:34 each, 5×34 = 170 out of 172)
+      // Default: spread boards in rows of 5
       const col = index % 5;
       const row = Math.floor(index / 5);
 
       return {
         i: board.id,
-        x: col * 34 + (col > 0 ? col * 0 : 0),
+        x: col * 34,
         y: row * (contentH + 2),
         w: 34,
         h: contentH,
@@ -640,6 +679,15 @@ const handleImportBookmarks = async (folderId?: string) => {
       )}
       <Toast />
 
+      {showOnboarding && (
+        <Onboarding
+          onComplete={() => {
+            localStorage.setItem('tabdeck-onboarding-done', '1');
+            setShowOnboarding(false);
+          }}
+        />
+      )}
+
       <div className="td-topbar">
         <div className="td-topbar-row">
           <div className="td-topbar-left">
@@ -684,6 +732,55 @@ const handleImportBookmarks = async (folderId?: string) => {
               aria-label="Create note"
             >
               <StickyNote size={16} strokeWidth={2.2} />
+            </button>
+
+            <button
+              className="td-create-board-btn"
+              type="button"
+              onClick={() => {
+                if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) {
+                  showToast('Workspace is full (max 10 boards)', 'error');
+                  return;
+                }
+                useWorkspaceStore.getState().addTodoBoard(activeWorkspace.id);
+              }}
+              title="Create todo list"
+              aria-label="Create todo list"
+            >
+              <CheckSquare size={15} strokeWidth={2.2} />
+            </button>
+
+            <button
+              className="td-create-board-btn"
+              type="button"
+              onClick={() => {
+                if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) {
+                  showToast('Workspace is full (max 10 boards)', 'error');
+                  return;
+                }
+                useWorkspaceStore.getState().addBoard(activeWorkspace.id, 'Weather');
+                // Set it as weather type after creation
+                setTimeout(() => {
+                  const state = useWorkspaceStore.getState();
+                  const ws = state.getActiveWorkspace();
+                  const lastBoard = ws?.boards[ws.boards.length - 1];
+                  if (lastBoard && lastBoard.name === 'Weather') {
+                    state.updateNoteContent(activeWorkspace.id, lastBoard.id, '');
+                    // Directly set type via setState
+                    useWorkspaceStore.setState((s) => ({
+                      workspaces: s.workspaces.map((w) =>
+                        w.id === activeWorkspace.id
+                          ? { ...w, boards: w.boards.map((b) => b.id === lastBoard.id ? { ...b, type: 'weather' as const } : b) }
+                          : w
+                      ),
+                    }));
+                  }
+                }, 50);
+              }}
+              title="Create weather widget"
+              aria-label="Create weather widget"
+            >
+              <CloudSun size={15} strokeWidth={2.2} />
             </button>
 
             <div className="td-search-bar">

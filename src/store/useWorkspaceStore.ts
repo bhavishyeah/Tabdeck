@@ -47,7 +47,10 @@ interface WorkspaceState {
   removeWorkspace: (workspaceId: string) => void;
   addBoard: (workspaceId: string, name?: string) => void;
   addNoteBoard: (workspaceId: string, name?: string) => void;
+  addTodoBoard: (workspaceId: string, name?: string) => void;
+  duplicateBoard: (workspaceId: string, boardId: string) => void;
   updateNoteContent: (workspaceId: string, boardId: string, content: string) => void;
+  updateTodos: (workspaceId: string, boardId: string, todos: import('../lib/workspaceTypes').TodoItem[]) => void;
   renameBoard: (workspaceId: string, boardId: string, name: string) => void;
   setBoardColor: (workspaceId: string, boardId: string, color: string | undefined) => void;
   removeBoard: (workspaceId: string, boardId: string) => void;
@@ -146,6 +149,44 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           }),
         })),
 
+      addTodoBoard: (workspaceId, name = 'Todo') =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) => {
+            if (workspace.id !== workspaceId) return workspace;
+            if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            return {
+              ...workspace,
+              boards: [...workspace.boards, { ...createBoard(name), type: 'todo' as const, todos: [] }],
+              updatedAt: now(),
+            };
+          }),
+        })),
+
+      duplicateBoard: (workspaceId, boardId) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) => {
+            if (workspace.id !== workspaceId) return workspace;
+            if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            const board = workspace.boards.find((b) => b.id === boardId);
+            if (!board) return workspace;
+            const duplicate = {
+              ...board,
+              id: uid(),
+              name: `${board.name} (copy)`,
+              layout: undefined,
+              links: board.links.map((l) => ({ ...l, id: uid() })),
+              todos: board.todos?.map((t) => ({ ...t, id: uid() })),
+              createdAt: now(),
+              updatedAt: now(),
+            };
+            return {
+              ...workspace,
+              boards: [...workspace.boards, duplicate],
+              updatedAt: now(),
+            };
+          }),
+        })),
+
       updateNoteContent: (workspaceId, boardId, content) =>
         set((state) => ({
           workspaces: state.workspaces.map((workspace) =>
@@ -155,6 +196,23 @@ export const useWorkspaceStore = create<WorkspaceState>()(
                   boards: workspace.boards.map((board) =>
                     board.id === boardId
                       ? { ...board, noteContent: content, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
+      updateTodos: (workspaceId, boardId, todos) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, todos, updatedAt: now() }
                       : board
                   ),
                   updatedAt: now(),

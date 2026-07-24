@@ -1088,6 +1088,22 @@ button {
 /* react-grid-layout overrides */
 .react-grid-item {
   transition: all 200ms ease;
+  animation: td-board-appear 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes td-board-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.7) translateY(20px);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .react-grid-item.react-grid-placeholder {
@@ -1311,4 +1327,264 @@ button {
 
 .td-note-textarea::-webkit-scrollbar {
   display: none;
+}
+
+
+/* Onboarding */
+.td-onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
+  animation: td-fade-in 300ms ease;
+}
+
+@keyframes td-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.td-onboarding-spotlight {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  z-index: 201;
+  transition: all 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.td-onboarding-tooltip {
+  position: fixed;
+  z-index: 202;
+  width: 300px;
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+  animation: td-tooltip-in 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes td-tooltip-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.td-onboarding-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111;
+}
+
+.td-onboarding-desc {
+  margin: 0 0 16px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #555;
+  line-height: 1.6;
+}
+
+.td-onboarding-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.td-onboarding-dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.td-onboarding-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ddd;
+  transition: background 200ms ease;
+}
+
+.td-onboarding-dot.is-active {
+  background: #6366f1;
+}
+
+.td-onboarding-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.td-onboarding-btn {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.td-onboarding-back {
+  background: #f1f1f1;
+  color: #333;
+}
+
+.td-onboarding-next {
+  background: #6366f1;
+  color: #fff;
+}
+
+.td-onboarding-next:hover {
+  background: #5558e6;
+}
+
+.td-onboarding-skip {
+  font-size: 10px;
+  color: #999;
+  cursor: pointer;
+  text-align: center;
+  width: 100%;
+  display: block;
+}
+
+.td-onboarding-skip:hover {
+  color: #666;
+}
+
+
+/* Todo board */
+.td-todo-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.td-todo-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.td-todo-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  color: inherit;
+  transition: background 100ms ease;
+}
+
+.td-todo-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.td-todo-item.is-done .td-todo-text {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.td-todo-checkbox {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #6366f1;
+}
+
+.td-todo-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.td-todo-remove {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  opacity: 0;
+  cursor: pointer;
+  color: inherit;
+  border-radius: 4px;
+  transition: opacity 100ms ease;
+}
+
+.td-todo-item:hover .td-todo-remove {
+  opacity: 0.6;
+}
+
+.td-todo-remove:hover {
+  opacity: 1 !important;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.td-todo-add {
+  margin-top: 4px;
+}
+
+.td-todo-input {
+  width: 100%;
+  height: 22px;
+  padding: 0 6px;
+  border: none;
+  outline: none;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  font-size: 10px;
+  color: inherit;
+  font-family: inherit;
+}
+
+.td-todo-input::placeholder {
+  color: inherit;
+  opacity: 0.4;
+}
+
+/* Weather widget */
+.td-weather-widget {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px;
+  color: inherit;
+}
+
+.td-weather-icon {
+  opacity: 0.7;
+}
+
+.td-weather-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.td-weather-temp {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.td-weather-desc {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.td-weather-city {
+  font-size: 9px;
+  opacity: 0.5;
+}
+
+.td-weather-loading,
+.td-weather-error {
+  font-size: 10px;
+  opacity: 0.5;
+  padding: 8px;
 }
