@@ -19,8 +19,8 @@ permissions: ['storage', 'unlimitedStorage', 'activeTab', 'tabs', 'bookmarks', '
   commands: {
     'quick-save-tab': {
       suggested_key: {
-        default: 'Ctrl+Shift+Y',
-        mac: 'Command+Shift+Y',
+        default: 'Ctrl+Shift+Z',
+        mac: 'Command+Shift+Z',
       },
       description: 'Save current tab to TabDeck',
     },

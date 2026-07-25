@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { ArrowRightLeft, Pencil, Trash2 } from 'lucide-react';
 import type { LinkCardType } from '../../lib/types';
 import { getFaviconUrl } from '../../lib/favicon';
+import { useSettingsStore } from '../../store/useSettingsStore';
 
 interface TransferTarget {
   workspaceId: string;
@@ -163,7 +164,7 @@ export function LinkCard({ link, onDelete, onRename, onTransfer, transferTargets
           <a
             className="td-link-name"
             href={link.url}
-            target="_blank"
+            target={useSettingsStore.getState().openLinksNewTab ? '_blank' : '_self'}
             rel="noreferrer"
             title={link.title}
           >

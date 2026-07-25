@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import type { BoardItem, LinkItem, LiveWallpaperType, WorkspaceItem } from '../lib/workspaceTypes';
 import { MAX_BOARDS_PER_WORKSPACE, MAX_LINKS_PER_BOARD } from '../lib/bookmarkImport';
+import { useSettingsStore } from './useSettingsStore';
 
 const uid = () => crypto.randomUUID();
 const now = () => Date.now();
@@ -48,6 +49,7 @@ interface WorkspaceState {
   addBoard: (workspaceId: string, name?: string) => void;
   addNoteBoard: (workspaceId: string, name?: string) => void;
   addTodoBoard: (workspaceId: string, name?: string) => void;
+  addClockBoard: (workspaceId: string) => void;
   duplicateBoard: (workspaceId: string, boardId: string) => void;
   updateNoteContent: (workspaceId: string, boardId: string, content: string) => void;
   updateTodos: (workspaceId: string, boardId: string, todos: import('../lib/workspaceTypes').TodoItem[]) => void;
@@ -128,9 +130,13 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           workspaces: state.workspaces.map((workspace) => {
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            const s = useSettingsStore.getState();
+            const col = workspace.boards.length % Math.floor(172 / s.defaultBoardW);
+            const row = Math.floor(workspace.boards.length / Math.floor(172 / s.defaultBoardW));
+            const layout = { x: col * s.defaultBoardW, y: row * (s.defaultBoardH + 2), w: s.defaultBoardW, h: s.defaultBoardH };
             return {
               ...workspace,
-              boards: [...workspace.boards, createBoard(name)],
+              boards: [...workspace.boards, { ...createBoard(name), layout }],
               updatedAt: now(),
             };
           }),
@@ -141,9 +147,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           workspaces: state.workspaces.map((workspace) => {
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            const col = workspace.boards.length % 5;
+            const row = Math.floor(workspace.boards.length / 5);
+            const layout = { x: col * 34, y: row * 12, w: 34, h: 7 };
             return {
               ...workspace,
-              boards: [...workspace.boards, { ...createBoard(name), type: 'note' as const, noteContent: '' }],
+              boards: [...workspace.boards, { ...createBoard(name), type: 'note' as const, noteContent: '', layout }],
               updatedAt: now(),
             };
           }),
@@ -154,9 +163,28 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           workspaces: state.workspaces.map((workspace) => {
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            const col = workspace.boards.length % 5;
+            const row = Math.floor(workspace.boards.length / 5);
+            const layout = { x: col * 34, y: row * 12, w: 34, h: 7 };
             return {
               ...workspace,
-              boards: [...workspace.boards, { ...createBoard(name), type: 'todo' as const, todos: [] }],
+              boards: [...workspace.boards, { ...createBoard(name), type: 'todo' as const, todos: [], layout }],
+              updatedAt: now(),
+            };
+          }),
+        })),
+
+      addClockBoard: (workspaceId) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) => {
+            if (workspace.id !== workspaceId) return workspace;
+            if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            const col = workspace.boards.length % 5;
+            const row = Math.floor(workspace.boards.length / 5);
+            const layout = { x: col * 34, y: row * 12, w: 34, h: 7 };
+            return {
+              ...workspace,
+              boards: [...workspace.boards, { ...createBoard('Clock'), type: 'clock' as const, layout }],
               updatedAt: now(),
             };
           }),

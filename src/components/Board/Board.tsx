@@ -5,9 +5,11 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { ArrowRightLeft, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { BoardItem, WorkspaceItem } from '../../lib/workspaceTypes';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
+import { useSettingsStore } from '../../store/useSettingsStore';
 import { LinkCard } from '../Card/LinkCard';
 import { TodoBoardContent } from '../Widgets/TodoBoard';
 import { WeatherWidget } from '../Widgets/WeatherWidget';
+import { ClockWidget } from '../Widgets/ClockWidget';
 
 interface Props {
   workspaceId: string;
@@ -152,38 +154,60 @@ export function Board({ workspaceId, board, workspaces }: Props) {
     <section
       ref={mergedRef}
       className={`td-board-panel ${isOver ? 'is-over' : ''} ${showForm ? 'is-form-open' : ''}`}
-      style={board.color ? { background: `${board.color}80`, borderColor: `${board.color}aa`, color: '#fff' } : undefined}
+      style={(() => {
+        const { textMode, boardOpacity, boardRadius } = useSettingsStore.getState();
+        const baseStyle: React.CSSProperties = { borderRadius: `${boardRadius}px` };
+        if (board.color) {
+          // Convert hex color to rgba with opacity
+          const hex = board.color;
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          baseStyle.background = `rgba(${r}, ${g}, ${b}, ${boardOpacity})`;
+          baseStyle.borderColor = `${board.color}aa`;
+        } else {
+          baseStyle.background = `rgba(250, 248, 244, ${boardOpacity})`;
+        }
+        if (textMode === 'light') baseStyle.color = '#fff';
+        else if (textMode === 'dark') baseStyle.color = '#111';
+        else if (board.color) baseStyle.color = '#fff';
+        return baseStyle;
+      })()}
+      onContextMenu={(board.type === 'clock' || board.type === 'weather') ? handleBoardNameContextMenu : undefined}
     >
       {/* Drag handle bar */}
       <div className="td-board-drag-bar" />
 
-      <div className="td-board-top">
-        {isRenaming ? (
-          <input
-            ref={renameRef}
-            className="td-board-name"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={handleCommitRename}
-            onKeyDown={handleRenameKeyDown}
-            spellCheck={false}
-          />
-        ) : (
-          <span
-            className="td-board-name-label"
-            onContextMenu={handleBoardNameContextMenu}
-            title="Right-click for options"
-          >
-            {board.name}
-          </span>
-        )}
-      </div>
+      {(board.type !== 'clock' && board.type !== 'weather') && (
+        <div className="td-board-top">
+          {isRenaming ? (
+            <input
+              ref={renameRef}
+              className="td-board-name"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleCommitRename}
+              onKeyDown={handleRenameKeyDown}
+              spellCheck={false}
+            />
+          ) : (
+            <span
+              className="td-board-name-label"
+              onContextMenu={handleBoardNameContextMenu}
+              title="Right-click for options"
+            >
+              {board.name}
+            </span>
+          )}
+        </div>
+      )}
 
       {board.type === 'note' ? (
         <textarea
           className="td-note-textarea"
           value={board.noteContent || ''}
           onChange={(e) => updateNoteContent(workspaceId, board.id, e.target.value)}
+          onContextMenu={handleBoardNameContextMenu}
           placeholder="Write your note here..."
           spellCheck={false}
         />
@@ -194,6 +218,8 @@ export function Board({ workspaceId, board, workspaces }: Props) {
         />
       ) : board.type === 'weather' ? (
         <WeatherWidget />
+      ) : board.type === 'clock' ? (
+        <ClockWidget />
       ) : (
         <div className="td-board-links">
           {board.links.length === 0 ? (
@@ -264,22 +290,26 @@ export function Board({ workspaceId, board, workspaces }: Props) {
                 : { top: boardContextMenu.y, left: boardContextMenu.x }
             }
           >
-            <button
-              className="td-link-context-item"
-              type="button"
-              onClick={handleAddLink}
-            >
-              <Plus size={13} strokeWidth={2} />
-              <span>Add link</span>
-            </button>
-            <button
-              className="td-link-context-item"
-              type="button"
-              onClick={handleStartRename}
-            >
-              <Pencil size={13} strokeWidth={2} />
-              <span>Rename board</span>
-            </button>
+            {board.type !== 'clock' && board.type !== 'weather' && (
+              <button
+                className="td-link-context-item"
+                type="button"
+                onClick={handleAddLink}
+              >
+                <Plus size={13} strokeWidth={2} />
+                <span>Add link</span>
+              </button>
+            )}
+            {board.type !== 'clock' && board.type !== 'weather' && (
+              <button
+                className="td-link-context-item"
+                type="button"
+                onClick={handleStartRename}
+              >
+                <Pencil size={13} strokeWidth={2} />
+                <span>Rename board</span>
+              </button>
+            )}
             <div className="td-context-divider" />
             <div className="td-context-section-label">Color</div>
             <div className="td-board-color-picks">

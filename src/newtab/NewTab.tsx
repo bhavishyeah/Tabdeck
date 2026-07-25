@@ -10,12 +10,13 @@ import {
 import RGL, { WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { CheckSquare, CloudSun, Plus, Search, StickyNote } from 'lucide-react';
+import { CheckSquare, Clock as ClockIcon, CloudSun, LayoutGrid, Plus, Search, StickyNote } from 'lucide-react';
 import { Board } from '../components/Board/Board';
-import { Clock } from '../components/Widgets/Clock';
 import { Toolbar } from '../components/UI/Toolbar';
 import { Toast } from '../components/UI/Toast';
 import { Onboarding } from '../components/UI/Onboarding';
+import { SettingsButton } from '../components/UI/Settings';
+import { useSettingsStore } from '../store/useSettingsStore';
 import { WorkspaceTabs } from '../components/UI/WorkspaceTabs';
 import { importBookmarkFolder, MAX_BOARDS_PER_WORKSPACE } from '../lib/bookmarkImport';
 import { storeVideoBlob, deleteVideoBlob, getVideoBlob } from '../lib/videoStorage';
@@ -137,6 +138,26 @@ export function NewTab() {
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('tabdeck-onboarding-done');
   });
+  const [toolbarOpen, setToolbarOpen] = useState(true);
+  const [widgetsOpen, setWidgetsOpen] = useState(false);
+  const appSettings = useSettingsStore();
+
+  // Auto-close toolbar timer
+  useEffect(() => {
+    if (!appSettings.autoCloseToolbar || !toolbarOpen) return;
+    const timer = setTimeout(() => setToolbarOpen(false), appSettings.autoCloseToolbar * 1000);
+    return () => clearTimeout(timer);
+  }, [toolbarOpen, appSettings.autoCloseToolbar]);
+
+  // Auto-lock layout timer
+  useEffect(() => {
+    if (!appSettings.autoLock) return;
+    const timer = setTimeout(() => setLayoutLocked(true), appSettings.autoLock * 1000);
+    const reset = () => clearTimeout(timer);
+    // Reset on any interaction
+    document.addEventListener('mousedown', reset, { once: true });
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', reset); };
+  }, [layoutLocked, appSettings.autoLock]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -144,76 +165,126 @@ export function NewTab() {
     })
   );
 
-  // Prevent browser zoom + keyboard shortcuts
+  // Keyboard shortcuts + zoom prevention
   useEffect(() => {
-    // Push initial state for undo
     const state = useWorkspaceStore.getState();
     pushState({ workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId });
 
-    // Subscribe to state changes for undo stack
     const unsub = useWorkspaceStore.subscribe((state) => {
       pushState({ workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId });
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+      const alt = e.altKey;
+
       // Prevent zoom
-      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+      if (ctrl && !alt && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
         e.preventDefault();
       }
 
       // Ctrl+Z — undo
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+      if (ctrl && !alt && !e.shiftKey && e.code === 'KeyZ') {
         e.preventDefault();
-        const prev = undo() as { workspaces: any[]; activeWorkspaceId: string } | null;
-        if (prev) {
-          useWorkspaceStore.setState({
-            workspaces: prev.workspaces,
-            activeWorkspaceId: prev.activeWorkspaceId,
-          });
-        }
+        const prev = undo() as any;
+        if (prev) useWorkspaceStore.setState({ workspaces: prev.workspaces, activeWorkspaceId: prev.activeWorkspaceId });
       }
 
-      // Ctrl+Shift+Z — redo
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+      // Ctrl+Y — redo
+      if (ctrl && !alt && !e.shiftKey && e.code === 'KeyY') {
         e.preventDefault();
-        const next = redo() as { workspaces: any[]; activeWorkspaceId: string } | null;
-        if (next) {
-          useWorkspaceStore.setState({
-            workspaces: next.workspaces,
-            activeWorkspaceId: next.activeWorkspaceId,
-          });
-        }
+        const next = redo() as any;
+        if (next) useWorkspaceStore.setState({ workspaces: next.workspaces, activeWorkspaceId: next.activeWorkspaceId });
       }
 
-      // Ctrl+B — create new board
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'b') {
+      // Ctrl+B — new bookmark board
+      if (ctrl && !alt && !e.shiftKey && e.code === 'KeyB') {
         e.preventDefault();
         const ws = useWorkspaceStore.getState().getActiveWorkspace();
-        if (ws && ws.boards.length < MAX_BOARDS_PER_WORKSPACE) {
-          useWorkspaceStore.getState().addBoard(ws.id);
-        }
+        if (ws && ws.boards.length < MAX_BOARDS_PER_WORKSPACE) useWorkspaceStore.getState().addBoard(ws.id);
       }
 
-      // Ctrl+Shift+B — create new note
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'B') {
+      // Ctrl+M — toggle toolbar
+      if (ctrl && !alt && e.code === 'KeyM') {
         e.preventDefault();
+        setToolbarOpen((v) => !v);
+      }
+
+      // Alt shortcuts (work regardless of toolbar state)
+      if (alt && !ctrl && !e.shiftKey) {
         const ws = useWorkspaceStore.getState().getActiveWorkspace();
-        if (ws && ws.boards.length < MAX_BOARDS_PER_WORKSPACE) {
-          useWorkspaceStore.getState().addNoteBoard(ws.id);
-        }
-      }
+        const canAdd = ws && ws.boards.length < MAX_BOARDS_PER_WORKSPACE;
 
-      // Ctrl+M — toggle layout lock
-      if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
-        e.preventDefault();
-        setLayoutLocked((v) => !v);
+        switch (e.code) {
+          case 'KeyN': // Note
+            e.preventDefault();
+            if (canAdd && ws) useWorkspaceStore.getState().addNoteBoard(ws.id);
+            break;
+          case 'KeyW': // Weather
+            e.preventDefault();
+            if (canAdd && ws) {
+              useWorkspaceStore.getState().addBoard(ws.id, 'Weather');
+              setTimeout(() => {
+                const s = useWorkspaceStore.getState();
+                const w = s.getActiveWorkspace();
+                const last = w?.boards[w.boards.length - 1];
+                if (last?.name === 'Weather') {
+                  useWorkspaceStore.setState((st) => ({
+                    workspaces: st.workspaces.map((wk) =>
+                      wk.id === ws.id ? { ...wk, boards: wk.boards.map((b) => b.id === last.id ? { ...b, type: 'weather' as const } : b) } : wk
+                    ),
+                  }));
+                }
+              }, 50);
+            }
+            break;
+          case 'KeyT': // Todo
+            e.preventDefault();
+            if (canAdd && ws) useWorkspaceStore.getState().addTodoBoard(ws.id);
+            break;
+          case 'KeyC': // Clock
+            e.preventDefault();
+            if (canAdd && ws) useWorkspaceStore.getState().addClockBoard(ws.id);
+            break;
+          case 'KeyL': // Lock/unlock
+            e.preventDefault();
+            setLayoutLocked((v) => !v);
+            break;
+          case 'KeyS': // Focus search
+            e.preventDefault();
+            (document.querySelector('.td-search-input') as HTMLInputElement)?.focus();
+            break;
+          case 'KeyE': // Export JSON
+            e.preventDefault();
+            handleExport();
+            break;
+          case 'KeyI': // Import JSON
+            e.preventDefault();
+            (document.querySelector('input[accept="application/json"]') as HTMLInputElement)?.click();
+            break;
+          case 'KeyP': // Wallpaper
+            e.preventDefault();
+            (document.querySelector('input[accept="image/*,video/mp4,video/webm"]') as HTMLInputElement)?.click();
+            break;
+          case 'KeyX': // Wipe everything
+            e.preventDefault();
+            if (confirm('Clear ALL boards, links, and wallpapers from this workspace? Cannot be undone.')) {
+              const wsId = useWorkspaceStore.getState().activeWorkspaceId;
+              useWorkspaceStore.setState((s) => ({
+                workspaces: s.workspaces.map((w) =>
+                  w.id === wsId ? { ...w, boards: [], wallpaper: null, videoWallpaper: null, updatedAt: Date.now() } : w
+                ),
+              }));
+              showToast('Workspace cleared', 'info');
+            }
+            break;
+        }
+        return;
       }
     };
 
     const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-      }
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -225,6 +296,20 @@ export function NewTab() {
       document.removeEventListener('wheel', handleWheel);
     };
   }, []);
+
+  // Auto-close toolbar
+  useEffect(() => {
+    if (!appSettings.autoCloseToolbar || !toolbarOpen) return;
+    const timer = setTimeout(() => setToolbarOpen(false), appSettings.autoCloseToolbar * 1000);
+    return () => clearTimeout(timer);
+  }, [toolbarOpen, appSettings.autoCloseToolbar]);
+
+  // Auto-lock layout
+  useEffect(() => {
+    if (!appSettings.autoLock) return;
+    const timer = setTimeout(() => setLayoutLocked(true), appSettings.autoLock * 1000);
+    return () => clearTimeout(timer);
+  }, [appSettings.autoLock]);
 
   useEffect(() => {
     storageGet([QUICK_SAVE_BOARD_KEY])
@@ -345,7 +430,6 @@ export function NewTab() {
   // Cell: 6×6px, margin: [4,4]. Zero leftover pixels.
   // Width: 172×6 + 171×4 = 1716px. Height: 85×6 + 84×4 = 846px.
   // Board w:34 = 336px. Board h:23 = 226px (fits 7 links).
-  const MAX_ROWS = 85;
   const CELL = 6;
   const GAP = 4;
   const HEADER_PX = 45;
@@ -397,7 +481,7 @@ export function NewTab() {
     const layouts = layout.map((item) => ({
       id: item.i,
       x: item.x,
-      y: Math.min(item.y, MAX_ROWS - item.h),
+      y: item.y,
       w: item.w,
       h: item.h,
     }));
@@ -636,6 +720,10 @@ const handleImportBookmarks = async (folderId?: string) => {
   const handleClearWallpaper = async () => {
     if (!activeWorkspace) return;
 
+    if (!confirm('Clear ALL boards, links, notes, and wallpapers from this workspace? This cannot be undone.')) {
+      return;
+    }
+
     if (activeWorkspace.videoWallpaper) {
       await deleteVideoBlob(activeWorkspace.videoWallpaper).catch(() => {});
     }
@@ -646,7 +734,15 @@ const handleImportBookmarks = async (folderId?: string) => {
       URL.revokeObjectURL(videoObjectUrl);
       setVideoObjectUrl(null);
     }
-    showToast('Wallpaper cleared', 'info');
+
+    // Clear all boards
+    useWorkspaceStore.setState((s) => ({
+      workspaces: s.workspaces.map((w) =>
+        w.id === activeWorkspace.id ? { ...w, boards: [], wallpaper: null, videoWallpaper: null, updatedAt: Date.now() } : w
+      ),
+    }));
+
+    showToast('Workspace cleared', 'info');
   };
 
   if (!activeWorkspace) return null;
@@ -656,7 +752,7 @@ const handleImportBookmarks = async (folderId?: string) => {
 
   return (
     <div
-      className="td-page"
+      className={`td-page ${appSettings.textMode === 'light' ? 'td-text-light' : appSettings.textMode === 'dark' ? 'td-text-dark' : ''}`}
       style={
         wallpaperUrl
           ? {
@@ -688,8 +784,20 @@ const handleImportBookmarks = async (folderId?: string) => {
         />
       )}
 
-      <div className="td-topbar">
-        <div className="td-topbar-row">
+      <div className="td-topbar" style={{ justifyContent: appSettings.toolbarPosition === 'center' ? 'center' : appSettings.toolbarPosition === 'right' ? 'flex-end' : 'flex-start' }}>
+        {/* Logo toggle button — always visible */}
+        <button
+          className="td-logo-btn"
+          type="button"
+          onClick={() => setToolbarOpen((v) => !v)}
+          title="Toggle toolbar"
+          aria-label="Toggle toolbar"
+        >
+          <img src="/favicon.svg" alt="TabDeck" width="20" height="20" />
+        </button>
+
+        {/* Toolbar row — slides in/out */}
+        <div className={`td-topbar-row ${toolbarOpen ? 'is-open' : ''}`}>
           <div className="td-topbar-left">
             <WorkspaceTabs
               workspaces={workspaces}
@@ -718,70 +826,85 @@ const handleImportBookmarks = async (folderId?: string) => {
               <Plus size={18} strokeWidth={2.4} />
             </button>
 
-            <button
-              className="td-create-board-btn"
-              type="button"
-              onClick={() => {
-                if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) {
-                  showToast('Workspace is full (max 10 boards)', 'error');
-                  return;
-                }
-                useWorkspaceStore.getState().addNoteBoard(activeWorkspace.id);
-              }}
-              title="Create note (Ctrl+Shift+B)"
-              aria-label="Create note"
-            >
-              <StickyNote size={16} strokeWidth={2.2} />
-            </button>
+            {/* Widgets dropdown */}
+            <div className="td-widgets-wrapper">
+              <button
+                className="td-create-board-btn"
+                type="button"
+                onClick={() => setWidgetsOpen((v) => !v)}
+                title="Widgets"
+                aria-label="Widgets"
+              >
+                <LayoutGrid size={16} strokeWidth={2.2} />
+              </button>
 
-            <button
-              className="td-create-board-btn"
-              type="button"
-              onClick={() => {
-                if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) {
-                  showToast('Workspace is full (max 10 boards)', 'error');
-                  return;
-                }
-                useWorkspaceStore.getState().addTodoBoard(activeWorkspace.id);
-              }}
-              title="Create todo list"
-              aria-label="Create todo list"
-            >
-              <CheckSquare size={15} strokeWidth={2.2} />
-            </button>
-
-            <button
-              className="td-create-board-btn"
-              type="button"
-              onClick={() => {
-                if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) {
-                  showToast('Workspace is full (max 10 boards)', 'error');
-                  return;
-                }
-                useWorkspaceStore.getState().addBoard(activeWorkspace.id, 'Weather');
-                // Set it as weather type after creation
-                setTimeout(() => {
-                  const state = useWorkspaceStore.getState();
-                  const ws = state.getActiveWorkspace();
-                  const lastBoard = ws?.boards[ws.boards.length - 1];
-                  if (lastBoard && lastBoard.name === 'Weather') {
-                    state.updateNoteContent(activeWorkspace.id, lastBoard.id, '');
-                    // Directly set type via setState
-                    useWorkspaceStore.setState((s) => ({
-                      workspaces: s.workspaces.map((w) =>
-                        w.id === activeWorkspace.id
-                          ? { ...w, boards: w.boards.map((b) => b.id === lastBoard.id ? { ...b, type: 'weather' as const } : b) }
-                          : w
-                      ),
-                    }));
-                  }
-                }, 50);
-              }}
-              title="Create weather widget"
-              aria-label="Create weather widget"
-            >
-              <CloudSun size={15} strokeWidth={2.2} />
-            </button>
+              {widgetsOpen && (
+                <div className="td-widgets-dropdown">
+                  <button
+                    className="td-link-context-item"
+                    type="button"
+                    onClick={() => {
+                      setWidgetsOpen(false);
+                      if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) { showToast('Workspace full', 'error'); return; }
+                      useWorkspaceStore.getState().addNoteBoard(activeWorkspace.id);
+                    }}
+                  >
+                    <StickyNote size={14} strokeWidth={2} />
+                    <span>Note</span>
+                  </button>
+                  <button
+                    className="td-link-context-item"
+                    type="button"
+                    onClick={() => {
+                      setWidgetsOpen(false);
+                      if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) { showToast('Workspace full', 'error'); return; }
+                      useWorkspaceStore.getState().addTodoBoard(activeWorkspace.id);
+                    }}
+                  >
+                    <CheckSquare size={14} strokeWidth={2} />
+                    <span>Todo List</span>
+                  </button>
+                  <button
+                    className="td-link-context-item"
+                    type="button"
+                    onClick={() => {
+                      setWidgetsOpen(false);
+                      if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) { showToast('Workspace full', 'error'); return; }
+                      useWorkspaceStore.getState().addBoard(activeWorkspace.id, 'Weather');
+                      setTimeout(() => {
+                        const state = useWorkspaceStore.getState();
+                        const ws = state.getActiveWorkspace();
+                        const lastBoard = ws?.boards[ws.boards.length - 1];
+                        if (lastBoard && lastBoard.name === 'Weather') {
+                          useWorkspaceStore.setState((s) => ({
+                            workspaces: s.workspaces.map((w) =>
+                              w.id === activeWorkspace.id
+                                ? { ...w, boards: w.boards.map((b) => b.id === lastBoard.id ? { ...b, type: 'weather' as const } : b) }
+                                : w
+                            ),
+                          }));
+                        }
+                      }, 50);
+                    }}
+                  >
+                    <CloudSun size={14} strokeWidth={2} />
+                    <span>Weather</span>
+                  </button>
+                  <button
+                    className="td-link-context-item"
+                    type="button"
+                    onClick={() => {
+                      setWidgetsOpen(false);
+                      if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) { showToast('Workspace full', 'error'); return; }
+                      useWorkspaceStore.getState().addClockBoard(activeWorkspace.id);
+                    }}
+                  >
+                    <ClockIcon size={14} strokeWidth={2} />
+                    <span>Clock</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div className="td-search-bar">
               <Search size={16} strokeWidth={2.2} />
@@ -804,7 +927,6 @@ const handleImportBookmarks = async (folderId?: string) => {
             >
               {layoutLocked ? '🔒' : '🔓'}
             </button>
-            <Clock />
             <Toolbar
               boards={activeWorkspace.boards as any}
               quickSaveBoardId={quickSaveBoardId}
@@ -848,8 +970,11 @@ const handleImportBookmarks = async (folderId?: string) => {
             isBounded={true}
             compactType={null}
             preventCollision={true}
+            autoSize={false}
+            style={{ minHeight: 'calc(100vh - 80px)' }}
             draggableHandle=".td-board-drag-bar"
-            onLayoutChange={handleGridLayoutChange}
+            onDragStop={handleGridLayoutChange}
+            onResizeStop={handleGridLayoutChange}
           >
             {visibleBoards.map((board) => (
               <div key={board.id}>
@@ -863,6 +988,11 @@ const handleImportBookmarks = async (folderId?: string) => {
           </ReactGridLayout>
         </DndContext>
       )}
+
+      <SettingsButton onResetOnboarding={() => {
+        localStorage.removeItem('tabdeck-onboarding-done');
+        setShowOnboarding(true);
+      }} />
     </div>
   );
 }

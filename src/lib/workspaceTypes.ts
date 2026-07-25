@@ -15,7 +15,7 @@ export interface TodoItem {
 export interface BoardItem {
   id: string;
   name: string;
-  type?: 'links' | 'note' | 'todo' | 'weather';
+  type?: 'links' | 'note' | 'todo' | 'weather' | 'clock';
   color?: string;
   noteContent?: string;
   todos?: TodoItem[];
