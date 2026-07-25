@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Settings as SettingsIcon, X } from 'lucide-react';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 
 const FONTS = [
   { name: 'Montserrat', value: "'Montserrat', sans-serif" },
@@ -156,6 +157,31 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                 <div className="td-settings-row">
                   {(['left', 'center', 'right'] as const).map((p) => (
                     <button key={p} className={`td-settings-pill ${settings.toolbarPosition === p ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ toolbarPosition: p })}>{p}</button>
+                  ))}
+                </div>
+
+                <label className="td-settings-label">Apply color to all boards</label>
+                <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
+                  {['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'].map((c) => (
+                    <button
+                      key={c}
+                      className="td-board-color-dot"
+                      type="button"
+                      style={{ background: c || 'rgba(250,248,244,0.92)' }}
+                      title={c || 'Default (no color)'}
+                      onClick={() => {
+                        const ws = useWorkspaceStore.getState().getActiveWorkspace();
+                        if (!ws) return;
+                        const color = c || undefined;
+                        useWorkspaceStore.setState((s) => ({
+                          workspaces: s.workspaces.map((w) =>
+                            w.id === ws.id
+                              ? { ...w, boards: w.boards.map((b) => ({ ...b, color })), updatedAt: Date.now() }
+                              : w
+                          ),
+                        }));
+                      }}
+                    />
                   ))}
                 </div>
               </>

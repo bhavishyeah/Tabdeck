@@ -144,7 +144,7 @@ export function WorkspaceTabs({
               type="button"
               onClick={() => onSelect(workspace.id)}
               onContextMenu={(e) => handleContextMenu(e, workspace.id)}
-              title={`${workspace.name} — right-click for options`}
+              data-tooltip={`${workspace.name} — right-click for options`}
             >
               {workspace.name}
             </button>

@@ -1699,7 +1699,6 @@ button {
 .td-settings-btn:hover {
   background: rgba(255, 255, 255, 0.25);
   color: #fff;
-  transform: rotate(30deg);
 }
 
 .td-settings-panel {
@@ -1946,4 +1945,202 @@ button {
 
 .td-text-dark .td-board-panel {
   color: #111 !important;
+}
+
+
+/* ===== 60fps ANIMATION OPTIMIZATION ===== */
+
+/* GPU acceleration hints for frequently animated elements */
+.td-board-panel,
+.td-toolbar-tray,
+.td-topbar-row,
+.td-link-context-menu,
+.td-widgets-dropdown,
+.td-settings-panel,
+.td-onboarding-tooltip,
+.td-onboarding-spotlight,
+.td-logo-btn,
+.td-toolbar-trigger,
+.td-toolbar-btn,
+.td-create-board-btn,
+.td-lock-btn,
+.td-link-row,
+.td-workspace-tab,
+.td-settings-btn {
+  will-change: transform, opacity;
+}
+
+/* Smooth 60fps transitions for all interactive elements */
+.td-board-panel {
+  transition: transform 250ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              opacity 200ms ease,
+              box-shadow 200ms ease,
+              background 200ms ease;
+}
+
+.td-link-row {
+  transition: transform 180ms ease, opacity 150ms ease, background 120ms ease;
+}
+
+.td-workspace-tab {
+  transition: transform 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.td-workspace-tab:active {
+  transform: scale(0.96);
+}
+
+.td-create-board-btn,
+.td-lock-btn,
+.td-settings-btn,
+.td-logo-btn {
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              background 150ms ease,
+              box-shadow 150ms ease;
+}
+
+.td-create-board-btn:active,
+.td-lock-btn:active {
+  transform: scale(0.9);
+}
+
+/* Context menu entrance */
+.td-link-context-menu,
+.td-widgets-dropdown {
+  animation: td-menu-in 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes td-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Settings panel entrance */
+.td-settings-panel {
+  animation: td-panel-in 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes td-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Board appear/delete animation */
+.react-grid-item {
+  transition: transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              opacity 200ms ease;
+}
+
+/* Toolbar drawer — smoother spring */
+.td-topbar-row {
+  transition:
+    max-width 400ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 250ms ease,
+    transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Button hover micro-interactions */
+.td-toolbar-btn:hover,
+.td-create-board-btn:hover,
+.td-board-color-dot:hover {
+  transform: scale(1.08);
+}
+
+.td-toolbar-btn:active,
+.td-board-color-dot:active {
+  transform: scale(0.92);
+}
+
+/* Smooth toast animation */
+.td-toast {
+  animation: td-toast-in 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes td-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Link drag feedback */
+.td-link-row.is-dragging {
+  transform: scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transition: none; /* Disable transition during drag for instant feedback */
+}
+
+/* Onboarding spotlight smooth movement */
+.td-onboarding-spotlight {
+  transition: all 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+
+/* Tooltips: using native title attribute (reliable, no clipping issues) */
+
+
+/* Global scrollbar styling — minimal strip */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6366f1;
+}
+
+/* Dark scrollbar for light-background panels (settings, context menus) */
+.td-settings-body::-webkit-scrollbar-thumb,
+.td-settings-fonts::-webkit-scrollbar-thumb,
+.td-context-scroll::-webkit-scrollbar-thumb,
+.td-todo-list::-webkit-scrollbar-thumb,
+.td-settings-shortcuts::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.td-settings-body::-webkit-scrollbar-thumb:hover,
+.td-settings-fonts::-webkit-scrollbar-thumb:hover,
+.td-context-scroll::-webkit-scrollbar-thumb:hover,
+.td-todo-list::-webkit-scrollbar-thumb:hover,
+.td-settings-shortcuts::-webkit-scrollbar-thumb:hover {
+  background: #6366f1;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.td-settings-body,
+.td-settings-fonts,
+.td-context-scroll,
+.td-todo-list,
+.td-settings-shortcuts {
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }

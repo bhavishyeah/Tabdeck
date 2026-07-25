@@ -108,15 +108,15 @@ npm run build  # Production build → /dist
 The toolbar is a retractable drawer activated by the TabDeck logo button.
 
 ### Toolbar elements (left to right):
-| # | Element | Function |
-|---|---------|----------|
-| 1 | TabDeck Logo | Toggle toolbar open/close |
-| 2 | Workspace Tabs | Switch/create workspaces |
-| 3 | + Button | Create bookmark board |
+| # | Element             | Function                             |
+|---|---------------------|--------------------------------------|
+| 1 | TabDeck Logo        | Toggle toolbar open/close            |
+| 2 | Workspace Tabs      | Switch/create workspaces             |
+| 3 | + Button            | Create bookmark board                |
 | 4 | Widgets (grid icon) | Dropdown: Note, Todo, Weather, Clock |
-| 5 | Search | Filter boards and links |
-| 6 | Lock Button | Toggle layout lock |
-| 7 | 3-Dot Menu (⋯) | Expands to reveal toolbar actions |
+| 5 | Search              | Filter boards and links              |
+| 6 | Lock Button         | Toggle layout lock                   |
+| 7 | 3-Dot Menu (⋯)      | Expands to reveal toolbar actions   |
 
 ### 3-Dot Menu actions:
 - Quick Save — cycle quick-save board
@@ -130,22 +130,22 @@ The toolbar is a retractable drawer activated by the TabDeck logo button.
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+B` | New bookmark board |
-| `Ctrl+M` | Toggle toolbar |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Alt+N` | New note board |
-| `Alt+T` | New todo list |
-| `Alt+W` | New weather widget |
-| `Alt+C` | New clock widget |
-| `Alt+L` | Lock/unlock layout |
-| `Alt+S` | Focus search bar |
-| `Alt+E` | Export JSON |
-| `Alt+I` | Import JSON |
-| `Alt+P` | Set wallpaper |
-| `Alt+X` | Wipe workspace |
+| Shortcut       | Action                                  |
+|----------------|-----------------------------------------|
+| `Ctrl+B`       | New bookmark board                      |
+| `Ctrl+M`       | Toggle toolbar                          |
+| `Ctrl+Z`       | Undo                                    |
+| `Ctrl+Y`       | Redo                                    |
+| `Alt+T`        | New todo list                           |
+| `Alt+N`        | New note board                          |
+| `Alt+W`        | New weather widget                      |
+| `Alt+C`        | New clock widget                        |
+| `Alt+L`        | Lock/unlock layout                      |
+| `Alt+S`        | Focus search bar                        |
+| `Alt+E`        | Export JSON                             |
+| `Alt+I`        | Import JSON                             |
+| `Alt+P`        | Set wallpaper                           |
+| `Alt+X`        | Wipe workspace                          |
 | `Ctrl+Shift+Z` | Quick save current tab (Chrome command) |
 
 ---
@@ -234,13 +234,13 @@ The tour uses a spotlight cutout effect that highlights each element with a whit
 ```
 src/
 ├── newtab/
-│   ├── main.tsx          — Entry point
-│   └── NewTab.tsx        — Main component (900+ lines)
+│   ├── main.tsx                      — Entry point
+│   └── NewTab.tsx                    — Main component (900+ lines)
 ├── components/
-│   ├── Board/Board.tsx   — Board panel (links/note/todo/weather/clock)
-│   ├── Card/LinkCard.tsx — Individual bookmark link
+│   ├── Board/Board.tsx               — Board panel (links/note/todo/weather/clock)
+│   ├── Card/LinkCard.tsx             — Individual bookmark link
 │   ├── UI/
-│   │   ├── Toolbar.tsx   — Retractable 3-dot menu
+│   │   ├── Toolbar.tsx               — Retractable 3-dot menu
 │   │   ├── WorkspaceTabs.tsx
 │   │   ├── Toast.tsx
 │   │   ├── Onboarding.tsx
@@ -252,19 +252,19 @@ src/
 │       ├── TodoBoard.tsx
 │       └── WeatherWidget.tsx
 ├── store/
-│   ├── useWorkspaceStore.ts  — All workspace/board/link CRUD
-│   ├── useSettingsStore.ts   — App settings (font, opacity, etc.)
-│   └── useUiStore.ts         — Toast notifications
+│   ├── useWorkspaceStore.ts          — All workspace/board/link CRUD
+│   ├── useSettingsStore.ts           — App settings (font, opacity, etc.)
+│   └── useUiStore.ts                 — Toast notifications
 ├── lib/
-│   ├── bookmarkImport.ts     — Import + auto-split logic
-│   ├── videoStorage.ts       — IndexedDB for video wallpapers
-│   ├── undoManager.ts        — Undo/redo stack
-│   ├── workspaceTypes.ts     — TypeScript interfaces
-│   ├── types.ts              — Link/Board types
-│   └── favicon.ts            — Favicon URL helper
+│   ├── bookmarkImport.ts             — Import + auto-split logic
+│   ├── videoStorage.ts               — IndexedDB for video wallpapers
+│   ├── undoManager.ts                — Undo/redo stack
+│   ├── workspaceTypes.ts             — TypeScript interfaces
+│   ├── types.ts                      — Link/Board types
+│   └── favicon.ts                    — Favicon URL helper
 ├── styles/
-│   └── global.css            — All styles (1300+ lines)
-└── background.ts             — Service worker (quick save handler)
+│   └── global.css                    — All styles (1300+ lines)
+└── background.ts                     — Service worker (quick save handler)
 ```
 
 ### Storage:
@@ -291,13 +291,13 @@ src/
 
 ## Version History
 
-| Version | Highlights |
-|---------|-----------|
-| v1.0.0 | Initial commit — basic boards, toolbar |
-| v2.0.0 | Glass UI, bookmark import, workspace management |
-| v3.0.0 | Bento grid, video wallpapers, transfer, lock, context menus |
-| v4.0.0 | Notes, todo, weather, clock, onboarding, undo/redo, duplicate, cleanup |
-| v4.1.0 | Full settings panel, Alt shortcuts, clock widget, colored board opacity |
+| Version | Highlights                                                              |
+|---------|-------------------------------------------------------------------------|
+| v1.0.0  | Initial commit — basic boards, toolbar                                  |
+| v2.0.0  | Glass UI, bookmark import, workspace management                         |
+| v3.0.0  | Bento grid, video wallpapers, transfer, lock, context menus             |
+| v4.0.0  | Notes, todo, weather, clock, onboarding, undo/redo, duplicate, cleanup  |
+| v4.1.0  | Full settings panel, Alt shortcuts, clock widget, colored board opacity |
 
 ---
 
