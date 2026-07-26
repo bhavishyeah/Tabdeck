@@ -12,6 +12,8 @@ export interface AppSettings {
   openLinksNewTab: boolean;
   defaultBoardW: number;
   defaultBoardH: number;
+  glassBlur: number;
+  glassSaturation: number;
 }
 
 const STORAGE_KEY = 'tabdeck-settings';
@@ -28,6 +30,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   openLinksNewTab: true,
   defaultBoardW: 34,
   defaultBoardH: 7,
+  glassBlur: 5,
+  glassSaturation: 100,
 };
 
 function loadFromStorage(): AppSettings {

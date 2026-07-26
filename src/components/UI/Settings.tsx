@@ -61,6 +61,12 @@ export function applyFontCSS(fontFamily: string, fontSize: number) {
   }
 }
 
+export function applyGlassCSS(blur: number, saturation: number) {
+  document.documentElement.style.setProperty('--td-glass-blur', `${blur}px`);
+  document.documentElement.style.setProperty('--td-glass-saturation', `${saturation}%`);
+  document.documentElement.style.setProperty('--td-backdrop', `blur(${blur}px) saturate(${saturation}%)`);
+}
+
 type Tab = 'appearance' | 'behavior' | 'data' | 'info';
 
 interface Props {
@@ -78,6 +84,11 @@ export function SettingsButton({ onResetOnboarding }: Props) {
   useEffect(() => {
     applyFontCSS(settings.fontFamily, settings.fontSize);
   }, [settings.fontFamily, settings.fontSize]);
+
+  // Apply glass effects on mount and when changed
+  useEffect(() => {
+    applyGlassCSS(settings.glassBlur, settings.glassSaturation);
+  }, [settings.glassBlur, settings.glassSaturation]);
 
   useEffect(() => {
     if (!open) return;
@@ -159,6 +170,21 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                     <button key={p} className={`td-settings-pill ${settings.toolbarPosition === p ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ toolbarPosition: p })}>{p}</button>
                   ))}
                 </div>
+
+                <div className="td-settings-divider" />
+                <label className="td-settings-section-title">Glass Effect</label>
+
+                <label className="td-settings-label">Blur ({settings.glassBlur}px)</label>
+                <input type="range" min={0} max={24} step={1} value={settings.glassBlur}
+                  onChange={(e) => settings.update({ glassBlur: +e.target.value })}
+                  className="td-settings-slider" />
+
+                <label className="td-settings-label">Saturation ({settings.glassSaturation}%)</label>
+                <input type="range" min={100} max={300} step={10} value={settings.glassSaturation}
+                  onChange={(e) => settings.update({ glassSaturation: +e.target.value })}
+                  className="td-settings-slider" />
+
+                <div className="td-settings-divider" />
 
                 <label className="td-settings-label">Apply color to all boards</label>
                 <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>

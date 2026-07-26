@@ -14,6 +14,9 @@
   --td-radius-pill: 999px;
   --td-font: 'Montserrat', sans-serif;
   --td-font-size: 10px;
+  --td-glass-blur: 5px;
+  --td-glass-saturation: 100%;
+  --td-backdrop: blur(5px) saturate(100%);
 }
 
 * {
@@ -113,8 +116,8 @@ button {
   padding: 6px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
@@ -183,8 +186,8 @@ button {
   padding: 0 18px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
@@ -215,8 +218,8 @@ button {
   place-items: center;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
@@ -241,8 +244,8 @@ button {
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
@@ -292,8 +295,8 @@ button {
   overflow: hidden;
   border-radius: var(--td-radius-pill);
   background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
@@ -375,8 +378,8 @@ button {
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
@@ -1218,8 +1221,8 @@ button {
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.15);
   cursor: pointer;
   font-size: 14px;
@@ -1590,8 +1593,8 @@ button {
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   cursor: pointer;
@@ -1688,8 +1691,8 @@ button {
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: var(--td-backdrop);
+  -webkit-backdrop-filter: var(--td-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
@@ -2143,4 +2146,20 @@ button {
 .td-todo-list,
 .td-settings-shortcuts {
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+
+/* Settings section title + divider */
+.td-settings-section-title {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #333;
+}
+
+.td-settings-divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.07);
+  margin: 8px 0;
 }
