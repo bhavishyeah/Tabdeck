@@ -1,12 +1,12 @@
-# TabDeck — Your Beautiful New Tab Dashboard
+# Frontly — Your Beautiful New Tab Dashboard
 
 > Transform your boring new tab into a stunning, organized bento-grid dashboard with draggable boards, live wallpapers, widgets, and more.
 
 ---
 
-## ✨ What is TabDeck?
+## ✨ What is Frontly?
 
-TabDeck replaces your Chrome new tab page with a beautiful dashboard where you can:
+Frontly replaces your Chrome new tab page with a beautiful dashboard where you can:
 - Organize your bookmarks into draggable boards
 - Add notes, to-do lists, weather, and clock widgets
 - Set live wallpapers (images, GIFs, or 4K videos)
@@ -23,9 +23,9 @@ TabDeck replaces your Chrome new tab page with a beautiful dashboard where you c
 
 ### Step 1 — Download the Extension
 
-1. Go to this page: [https://github.com/bhavishyeah/Tabdeck](https://github.com/bhavishyeah/Tabdeck)
+1. Go to this page: [https://github.com/bhavishyeah/Frontly](https://github.com/bhavishyeah/Frontly)
 2. Click on the **`release`** folder
-3. Click on **`tabdeck-v4.2.0.zip`**
+3. Click on **`Frontly-v4.2.0.zip`**
 4. Click the **Download** button (the small download icon on the right side)
 5. The file will be saved to your **Downloads** folder
 
@@ -35,17 +35,17 @@ TabDeck replaces your Chrome new tab page with a beautiful dashboard where you c
 
 **On Windows:**
 1. Go to your **Downloads** folder
-2. Find the file called `tabdeck-v4.2.0.zip`
+2. Find the file called `Frontly-v4.2.0.zip`
 3. Right-click on it
 4. Click **"Extract All..."**
 5. Click **"Extract"**
-6. A new folder called `tabdeck-v4.2.0` will appear — open it
+6. A new folder called `Frontly-v4.2.0` will appear — open it
 7. You will see another folder inside called **`dist`** — remember where this is!
 
 **On Mac:**
 1. Go to your **Downloads** folder
-2. Double-click `tabdeck-v4.2.0.zip` — it will automatically extract
-3. A folder called `tabdeck-v4.2.0` will appear — open it
+2. Double-click `Frontly-v4.2.0.zip` — it will automatically extract
+3. A folder called `Frontly-v4.2.0` will appear — open it
 4. You will see a folder inside called **`dist`**
 
 ---
@@ -56,7 +56,7 @@ TabDeck replaces your Chrome new tab page with a beautiful dashboard where you c
 2. In the address bar at the top, type: `chrome://extensions`
 3. Press **Enter**
 
-> ⚠️ **Note:** TabDeck currently works only on **Google Chrome** and **Microsoft Edge**. Firefox is not supported yet.
+> ⚠️ **Note:** Frontly currently works only on **Google Chrome** and **Microsoft Edge**. Firefox is not supported yet.
 
 ---
 
@@ -74,7 +74,7 @@ On the Extensions page:
 1. You will now see three new buttons appear at the top-left
 2. Click **"Load unpacked"**
 3. A file picker window will open
-4. Navigate to your **Downloads** → **`tabdeck-v4.2.0`** folder
+4. Navigate to your **Downloads** → **`Frontly-v4.2.0`** folder
 5. Click on the **`dist`** folder to select it
 6. Click **"Select Folder"** (Windows) or **"Open"** (Mac)
 
@@ -83,7 +83,7 @@ On the Extensions page:
 ### Step 6 — You're Done! 🎉
 
 1. Open a **new tab** in Chrome
-2. TabDeck will load automatically!
+2. Frontly will load automatically!
 3. A welcome tour will guide you through all the features
 
 ---
@@ -93,17 +93,17 @@ On the Extensions page:
 1. Download the new ZIP from the releases folder
 2. Extract it like before
 3. Go to `chrome://extensions`
-4. Find TabDeck and click **"Update"** or remove the old version and load the new `dist` folder
+4. Find Frontly and click **"Update"** or remove the old version and load the new `dist` folder
 
 ---
 
 ## ❓ Frequently Asked Questions
 
-**Q: Will TabDeck slow down my browser?**
-> No. TabDeck only runs when you open a new tab. It doesn't run in the background.
+**Q: Will Frontly slow down my browser?**
+> No. Frontly only runs when you open a new tab. It doesn't run in the background.
 
 **Q: Are my bookmarks safe?**
-> Yes. TabDeck only reads your bookmarks when you ask it to import them. It doesn't send any data anywhere — everything stays on your computer.
+> Yes. Frontly only reads your bookmarks when you ask it to import them. It doesn't send any data anywhere — everything stays on your computer.
 
 **Q: Will my data be lost if I update?**
 > No. Your boards, workspaces, and wallpapers are saved in Chrome's local storage and will remain even after updates.
@@ -112,16 +112,16 @@ On the Extensions page:
 > Edge: Yes, it works! Follow the same steps — Edge uses the same extension system as Chrome.
 > Firefox: Not supported yet.
 
-**Q: My new tab is not showing TabDeck. What do I do?**
+**Q: My new tab is not showing Frontly. What do I do?**
 > 1. Go to `chrome://extensions`
-> 2. Make sure TabDeck is turned ON (the toggle should be blue)
+> 2. Make sure Frontly is turned ON (the toggle should be blue)
 > 3. Open a new tab
 
 ---
 
 ## 🎯 Quick Start Guide
 
-Once TabDeck is installed, here's how to get started:
+Once Frontly is installed, here's how to get started:
 
 ### Add your first bookmarks:
 1. Click the **⋯ (three dots)** button in the top bar
@@ -177,7 +177,7 @@ Once TabDeck is installed, here's how to get started:
 
 ## 🐛 Found a Bug?
 
-Please report it at: [https://github.com/bhavishyeah/Tabdeck/issues](https://github.com/bhavishyeah/Tabdeck/issues)
+Please report it at: [https://github.com/bhavishyeah/Frontly/issues](https://github.com/bhavishyeah/Frontly/issues)
 
 ---
 

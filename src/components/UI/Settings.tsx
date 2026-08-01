@@ -61,10 +61,11 @@ export function applyFontCSS(fontFamily: string, fontSize: number) {
   }
 }
 
-export function applyGlassCSS(blur: number, saturation: number) {
-  document.documentElement.style.setProperty('--td-glass-blur', `${blur}px`);
-  document.documentElement.style.setProperty('--td-glass-saturation', `${saturation}%`);
+export function applyGlassCSS(blur: number, saturation: number, tint?: number) {
   document.documentElement.style.setProperty('--td-backdrop', `blur(${blur}px) saturate(${saturation}%)`);
+  if (tint !== undefined) {
+    document.documentElement.style.setProperty('--td-glass-tint', `${tint / 100}`);
+  }
 }
 
 type Tab = 'appearance' | 'behavior' | 'data' | 'info';
@@ -87,8 +88,8 @@ export function SettingsButton({ onResetOnboarding }: Props) {
 
   // Apply glass effects on mount and when changed
   useEffect(() => {
-    applyGlassCSS(settings.glassBlur, settings.glassSaturation);
-  }, [settings.glassBlur, settings.glassSaturation]);
+    applyGlassCSS(settings.glassBlur, settings.glassSaturation, settings.glassTint);
+  }, [settings.glassBlur, settings.glassSaturation, settings.glassTint]);
 
   useEffect(() => {
     if (!open) return;
@@ -182,6 +183,11 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                 <label className="td-settings-label">Saturation ({settings.glassSaturation}%)</label>
                 <input type="range" min={100} max={300} step={10} value={settings.glassSaturation}
                   onChange={(e) => settings.update({ glassSaturation: +e.target.value })}
+                  className="td-settings-slider" />
+
+                <label className="td-settings-label">Transparency ({settings.glassTint}%)</label>
+                <input type="range" min={5} max={90} step={5} value={settings.glassTint}
+                  onChange={(e) => settings.update({ glassTint: +e.target.value })}
                   className="td-settings-slider" />
 
                 <div className="td-settings-divider" />

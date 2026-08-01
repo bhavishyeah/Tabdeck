@@ -15,7 +15,7 @@ import { Board } from '../components/Board/Board';
 import { Toolbar } from '../components/UI/Toolbar';
 import { Toast } from '../components/UI/Toast';
 import { Onboarding } from '../components/UI/Onboarding';
-import { SettingsButton } from '../components/UI/Settings';
+import { SettingsButton, applyFontCSS, applyGlassCSS } from '../components/UI/Settings';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { WorkspaceTabs } from '../components/UI/WorkspaceTabs';
 import { importBookmarkFolder, MAX_BOARDS_PER_WORKSPACE } from '../lib/bookmarkImport';
@@ -141,6 +141,18 @@ export function NewTab() {
   const [toolbarOpen, setToolbarOpen] = useState(true);
   const [widgetsOpen, setWidgetsOpen] = useState(false);
   const appSettings = useSettingsStore();
+
+  // Apply all CSS settings on mount and whenever they change
+  useEffect(() => {
+    applyFontCSS(appSettings.fontFamily, appSettings.fontSize);
+    applyGlassCSS(appSettings.glassBlur, appSettings.glassSaturation, appSettings.glassTint);
+  }, [
+    appSettings.fontFamily,
+    appSettings.fontSize,
+    appSettings.glassBlur,
+    appSettings.glassSaturation,
+    appSettings.glassTint,
+  ]);
 
   // Auto-close toolbar timer
   useEffect(() => {

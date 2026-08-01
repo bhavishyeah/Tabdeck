@@ -1,26 +1,26 @@
-# TabDeck — Complete Documentation
+# Frontly — Complete Documentation
 
 ## Overview
 
-TabDeck is a Chrome extension that replaces your new tab page with a powerful, visually stunning bento-grid bookmark and productivity manager. It transforms the blank new tab into an organized dashboard where you can manage bookmarks, notes, todos, and widgets — all with a draggable, resizable grid layout.
+Frontly is a Chrome extension that replaces your new tab page with a powerful, visually stunning bento-grid bookmark and productivity manager. It transforms the blank new tab into an organized dashboard where you can manage bookmarks, notes, todos, and widgets — all with a draggable, resizable grid layout.
 
 ---
 
 ## Installation
 
 ### From GitHub (Developer Mode)
-1. Download `release/tabdeck-v4.1.0.zip` from the repository
+1. Download `release/Frontly-v4.1.0.zip` from the repository
 2. Unzip the file
 3. Open Chrome → `chrome://extensions`
 4. Enable **Developer mode** (top-right toggle)
 5. Click **Load unpacked**
 6. Select the unzipped folder
-7. Open a new tab — TabDeck is ready
+7. Open a new tab — Frontly is ready
 
 ### Development Setup
 ```bash
-git clone https://github.com/bhavishyeah/Tabdeck.git
-cd Tabdeck
+git clone https://github.com/bhavishyeah/Frontly.git
+cd Frontly
 npm install
 npm run dev    # Hot reload development
 npm run build  # Production build → /dist
@@ -86,7 +86,7 @@ npm run build  # Production build → /dist
 - **Animated GIFs** — stored as data URL, animates as background
 - **4K Videos** (MP4, WebM) — stored in IndexedDB as raw Blob, GPU-accelerated playback
 - Each workspace can have its own wallpaper
-- Default fallback: `tabdeck.png` in public folder
+- Default fallback: `Frontly.png` in public folder
 - Set via toolbar wallpaper button or `Alt+P`
 
 ### 9. Board Colors
@@ -105,12 +105,12 @@ npm run build  # Production build → /dist
 
 ## Toolbar
 
-The toolbar is a retractable drawer activated by the TabDeck logo button.
+The toolbar is a retractable drawer activated by the Frontly logo button.
 
 ### Toolbar elements (left to right):
 | # | Element             | Function                             |
 |---|---------------------|--------------------------------------|
-| 1 | TabDeck Logo        | Toggle toolbar open/close            |
+| 1 | Frontly Logo        | Toggle toolbar open/close            |
 | 2 | Workspace Tabs      | Switch/create workspaces             |
 | 3 | + Button            | Create bookmark board                |
 | 4 | Widgets (grid icon) | Dropdown: Note, Todo, Weather, Clock |
@@ -269,7 +269,7 @@ src/
 
 ### Storage:
 - **chrome.storage.local** (with `unlimitedStorage` permission) — workspace data, board layouts, image/GIF wallpapers
-- **IndexedDB** (`tabdeck-videos` database) — video wallpaper blobs
+- **IndexedDB** (`Frontly-videos` database) — video wallpaper blobs
 - **localStorage** — settings, onboarding state
 
 ### Grid System:

@@ -14,6 +14,7 @@ export interface AppSettings {
   defaultBoardH: number;
   glassBlur: number;
   glassSaturation: number;
+  glassTint: number; // 0-100, controls rgba white alpha for toolbar pills
 }
 
 const STORAGE_KEY = 'tabdeck-settings';
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultBoardH: 7,
   glassBlur: 5,
   glassSaturation: 100,
+  glassTint: 40,
 };
 
 function loadFromStorage(): AppSettings {

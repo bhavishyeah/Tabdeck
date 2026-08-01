@@ -141,11 +141,11 @@ async function notify(message: string) {
     await chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icon-128.png',
-      title: 'TabDeck',
+      title: 'Frontly',
       message,
     });
   } catch (error) {
-    console.warn('TabDeck notification failed:', error);
+    console.warn('Frontly notification failed:', error);
   }
 }
 
@@ -292,7 +292,7 @@ async function saveCurrentTab() {
         : `Saved "${title}" to ${targetBoard.name}`
     );
   } catch (error) {
-    console.error('TabDeck quick save failed:', error);
+    console.error('Frontly quick save failed:', error);
 
     await chrome.storage.local.set({
       [DEBUG_KEY]: {
