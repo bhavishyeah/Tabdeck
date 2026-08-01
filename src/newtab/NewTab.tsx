@@ -805,7 +805,7 @@ const handleImportBookmarks = async (folderId?: string) => {
           title="Toggle toolbar"
           aria-label="Toggle toolbar"
         >
-          <img src="/favicon.svg" alt="TabDeck" width="20" height="20" />
+          <img src="/icons/icon32.png" alt="TabDeck" width="22" height="22" style={{ borderRadius: '4px' }} />
         </button>
 
         {/* Toolbar row — slides in/out */}

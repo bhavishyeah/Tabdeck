@@ -20,6 +20,7 @@ interface Props {
 export function Board({ workspaceId, board, workspaces }: Props) {
   const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink, setBoardColor, updateNoteContent, updateTodos, duplicateBoard } =
     useWorkspaceStore();
+  const { textMode, boardOpacity, boardRadius, glassBlur, glassSaturation } = useSettingsStore();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -155,10 +156,12 @@ export function Board({ workspaceId, board, workspaces }: Props) {
       ref={mergedRef}
       className={`td-board-panel ${isOver ? 'is-over' : ''} ${showForm ? 'is-form-open' : ''}`}
       style={(() => {
-        const { textMode, boardOpacity, boardRadius } = useSettingsStore.getState();
-        const baseStyle: React.CSSProperties = { borderRadius: `${boardRadius}px` };
+        const baseStyle: React.CSSProperties = {
+          borderRadius: `${boardRadius}px`,
+          backdropFilter: `blur(${glassBlur}px) saturate(${glassSaturation}%)`,
+          WebkitBackdropFilter: `blur(${glassBlur}px) saturate(${glassSaturation}%)`,
+        };
         if (board.color) {
-          // Convert hex color to rgba with opacity
           const hex = board.color;
           const r = parseInt(hex.slice(1, 3), 16);
           const g = parseInt(hex.slice(3, 5), 16);
