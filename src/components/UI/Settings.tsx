@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Settings as SettingsIcon, X } from 'lucide-react';
+import { Settings as SettingsIcon, X, AlertTriangle } from 'lucide-react';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 
@@ -45,6 +45,41 @@ const SHORTCUTS = [
   { keys: 'Alt+X', action: 'Wipe' },
 ];
 
+// ─── Cursor-following tooltip slider ───
+interface SliderProps {
+  min: number;
+  max: number;
+  step?: number;
+  value: number;
+  onChange: (value: number) => void;
+  tooltip?: string;
+}
+
+function TipSlider({ min, max, step = 1, value, onChange, tooltip }: SliderProps) {
+  const [showTip, setShowTip] = useState(false);
+
+  return (
+    <div
+      className="f-slider-wrap"
+      onMouseEnter={() => tooltip && setShowTip(true)}
+      onMouseLeave={() => setShowTip(false)}
+    >
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(+e.target.value)}
+        className="td-settings-slider"
+      />
+      {showTip && tooltip && (
+        <div className="f-slider-tip">{tooltip}</div>
+      )}
+    </div>
+  );
+}
+
 export function applyFontCSS(fontFamily: string, fontSize: number) {
   const font = FONTS.find((f) => f.name === fontFamily);
   if (font) document.documentElement.style.setProperty('--td-font', font.value);
@@ -61,11 +96,20 @@ export function applyFontCSS(fontFamily: string, fontSize: number) {
   }
 }
 
-export function applyGlassCSS(blur: number, saturation: number, tint?: number) {
-  document.documentElement.style.setProperty('--td-backdrop', `blur(${blur}px) saturate(${saturation}%)`);
-  if (tint !== undefined) {
-    document.documentElement.style.setProperty('--td-glass-tint', `${tint / 100}`);
-  }
+export function applyGlassCSS(blur: number, saturation: number, _tint?: number, toolbarBlur?: number, toolbarSaturation?: number, _toolbarTint?: number, toolbarOpacity?: number, toolbarRadius?: number, toolbarGrain?: number) {
+  const root = document.documentElement.style;
+  // Board glass
+  root.setProperty('--td-backdrop', `blur(${blur}px) saturate(${saturation}%)`);
+  // Toolbar glass
+  const tb = toolbarBlur ?? blur;
+  const ts = toolbarSaturation ?? saturation;
+  const to = toolbarOpacity ?? 0.4;
+  const tr = toolbarRadius ?? 50;
+  const tg = toolbarGrain ?? 0;
+  root.setProperty('--td-toolbar-backdrop', `blur(${tb}px) saturate(${ts}%)`);
+  root.setProperty('--td-toolbar-opacity', `${to}`);
+  root.setProperty('--td-toolbar-radius', `${tr}px`);
+  root.setProperty('--td-toolbar-grain', `${tg / 100}`);
 }
 
 type Tab = 'appearance' | 'behavior' | 'data' | 'info';
@@ -88,8 +132,17 @@ export function SettingsButton({ onResetOnboarding }: Props) {
 
   // Apply glass effects on mount and when changed
   useEffect(() => {
-    applyGlassCSS(settings.glassBlur, settings.glassSaturation, settings.glassTint);
-  }, [settings.glassBlur, settings.glassSaturation, settings.glassTint]);
+    applyGlassCSS(
+      settings.glassBlur, settings.glassSaturation, settings.glassTint,
+      settings.toolbarBlur, settings.toolbarSaturation, settings.toolbarTint,
+      settings.toolbarOpacity, settings.toolbarRadius, settings.toolbarGrain
+    );
+  }, [settings.glassBlur, settings.glassSaturation, settings.glassTint, settings.toolbarBlur, settings.toolbarSaturation, settings.toolbarTint, settings.toolbarOpacity, settings.toolbarRadius, settings.toolbarGrain]);
+
+  // Sync board radius to CSS variable (used by resize handle)
+  useEffect(() => {
+    document.documentElement.style.setProperty('--td-board-radius', `${settings.boardRadius}px`);
+  }, [settings.boardRadius]);
 
   useEffect(() => {
     if (!open) return;
@@ -108,12 +161,16 @@ export function SettingsButton({ onResetOnboarding }: Props) {
     }
   }, [open, tab]);
 
+  const [confirmReset, setConfirmReset] = useState(false);
+
   const handleClearAll = () => {
-    if (confirm('This will delete ALL TabDeck data. Are you sure?')) {
-      chrome.storage.local.clear();
-      localStorage.clear();
-      window.location.reload();
+    if (!confirmReset) {
+      setConfirmReset(true);
+      return;
     }
+    chrome.storage.local.clear();
+    localStorage.clear();
+    window.location.reload();
   };
 
   return (
@@ -140,6 +197,9 @@ export function SettingsButton({ onResetOnboarding }: Props) {
           <div className="td-settings-body">
             {tab === 'appearance' && (
               <>
+                {/* ─── Typography ─── */}
+                <label className="td-settings-section-title">Typography</label>
+
                 <label className="td-settings-label">Font</label>
                 <div className="td-settings-fonts">
                   {FONTS.map((font) => (
@@ -150,13 +210,7 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                 </div>
 
                 <label className="td-settings-label">Font Size ({settings.fontSize}px)</label>
-                <input type="range" min={8} max={14} value={settings.fontSize} onChange={(e) => settings.update({ fontSize: +e.target.value })} className="td-settings-slider" />
-
-                <label className="td-settings-label">Board Opacity ({Math.round(settings.boardOpacity * 100)}%)</label>
-                <input type="range" min={50} max={100} value={Math.round(settings.boardOpacity * 100)} onChange={(e) => settings.update({ boardOpacity: +e.target.value / 100 })} className="td-settings-slider" />
-
-                <label className="td-settings-label">Border Radius ({settings.boardRadius}px)</label>
-                <input type="range" min={4} max={24} value={settings.boardRadius} onChange={(e) => settings.update({ boardRadius: +e.target.value })} className="td-settings-slider" />
+                <TipSlider min={8} max={14} value={settings.fontSize} onChange={(v) => settings.update({ fontSize: v })} tooltip="Base font size for all text content" />
 
                 <label className="td-settings-label">Text Mode</label>
                 <div className="td-settings-row">
@@ -165,46 +219,39 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                   ))}
                 </div>
 
-                <label className="td-settings-label">Toolbar Position</label>
-                <div className="td-settings-row">
-                  {(['left', 'center', 'right'] as const).map((p) => (
-                    <button key={p} className={`td-settings-pill ${settings.toolbarPosition === p ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ toolbarPosition: p })}>{p}</button>
-                  ))}
-                </div>
-
                 <div className="td-settings-divider" />
-                <label className="td-settings-section-title">Glass Effect</label>
+
+                {/* ─── Board ─── */}
+                <label className="td-settings-section-title">Board</label>
+
+                <label className="td-settings-label">Opacity ({Math.round(settings.boardOpacity * 100)}%)</label>
+                <TipSlider min={5} max={100} value={Math.round(settings.boardOpacity * 100)} onChange={(v) => settings.update({ boardOpacity: v / 100 })} tooltip="Board background transparency — lower values show more wallpaper" />
+
+                <label className="td-settings-label">Border Radius ({settings.boardRadius}px)</label>
+                <TipSlider min={4} max={24} value={settings.boardRadius} onChange={(v) => settings.update({ boardRadius: v })} tooltip="Corner roundness of all boards" />
 
                 <label className="td-settings-label">Blur ({settings.glassBlur}px)</label>
-                <input type="range" min={0} max={24} step={1} value={settings.glassBlur}
-                  onChange={(e) => settings.update({ glassBlur: +e.target.value })}
-                  className="td-settings-slider" />
+                <TipSlider min={0} max={24} value={settings.glassBlur} onChange={(v) => settings.update({ glassBlur: v })} tooltip="Backdrop blur intensity behind boards" />
 
                 <label className="td-settings-label">Saturation ({settings.glassSaturation}%)</label>
-                <input type="range" min={100} max={300} step={10} value={settings.glassSaturation}
-                  onChange={(e) => settings.update({ glassSaturation: +e.target.value })}
-                  className="td-settings-slider" />
+                <TipSlider min={100} max={300} step={10} value={settings.glassSaturation} onChange={(v) => settings.update({ glassSaturation: v })} tooltip="Color vibrancy of the wallpaper through boards" />
 
-                <label className="td-settings-label">Transparency ({settings.glassTint}%)</label>
-                <input type="range" min={5} max={90} step={5} value={settings.glassTint}
-                  onChange={(e) => settings.update({ glassTint: +e.target.value })}
-                  className="td-settings-slider" />
+                <label className="td-settings-label">Grain ({settings.grainIntensity}%)</label>
+                <TipSlider min={0} max={100} step={5} value={settings.grainIntensity} onChange={(v) => settings.update({ grainIntensity: v })} tooltip="Film grain texture overlay on boards" />
 
-                <div className="td-settings-divider" />
-
-                <label className="td-settings-label">Apply color to all boards</label>
+                <label className="td-settings-label">Color (all boards)</label>
                 <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
-                  {['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'].map((c) => (
+                  {['', 'clear', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'].map((c) => (
                     <button
                       key={c}
                       className="td-board-color-dot"
                       type="button"
-                      style={{ background: c || 'rgba(250,248,244,0.92)' }}
-                      title={c || 'Default (no color)'}
+                      style={{ background: c === 'clear' ? 'linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1))' : c || 'rgba(250,248,244,0.92)', border: c === 'clear' ? '2px dashed rgba(255,255,255,0.5)' : undefined }}
+                      title={c === 'clear' ? 'Clear glass (no color)' : c || 'Default'}
                       onClick={() => {
                         const ws = useWorkspaceStore.getState().getActiveWorkspace();
                         if (!ws) return;
-                        const color = c || undefined;
+                        const color = c === '' ? undefined : c;
                         useWorkspaceStore.setState((s) => ({
                           workspaces: s.workspaces.map((w) =>
                             w.id === ws.id
@@ -216,16 +263,51 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                     />
                   ))}
                 </div>
+
+                <div className="td-settings-divider" />
+
+                {/* ─── Toolbar ─── */}
+                <label className="td-settings-section-title">Toolbar</label>
+
+                <label className="td-settings-label">Position</label>
+                <div className="td-settings-row">
+                  {(['left', 'center', 'right'] as const).map((p) => (
+                    <button key={p} className={`td-settings-pill ${settings.toolbarPosition === p ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ toolbarPosition: p })}>{p}</button>
+                  ))}
+                </div>
+
+                <label className="td-settings-label">Opacity ({Math.round(settings.toolbarOpacity * 100)}%)</label>
+                <TipSlider min={5} max={100} value={Math.round(settings.toolbarOpacity * 100)} onChange={(v) => settings.update({ toolbarOpacity: v / 100 })} tooltip="Toolbar background transparency" />
+
+                <label className="td-settings-label">Border Radius ({settings.toolbarRadius}px)</label>
+                <TipSlider min={4} max={50} value={settings.toolbarRadius} onChange={(v) => settings.update({ toolbarRadius: v })} tooltip="Corner roundness of toolbar elements" />
+
+                <label className="td-settings-label">Blur ({settings.toolbarBlur}px)</label>
+                <TipSlider min={0} max={24} value={settings.toolbarBlur} onChange={(v) => settings.update({ toolbarBlur: v })} tooltip="Backdrop blur behind toolbar" />
+
+                <label className="td-settings-label">Saturation ({settings.toolbarSaturation}%)</label>
+                <TipSlider min={100} max={300} step={10} value={settings.toolbarSaturation} onChange={(v) => settings.update({ toolbarSaturation: v })} tooltip="Color vibrancy through toolbar glass" />
+
+                <label className="td-settings-label">Grain ({settings.toolbarGrain}%)</label>
+                <TipSlider min={0} max={100} step={5} value={settings.toolbarGrain} onChange={(v) => settings.update({ toolbarGrain: v })} tooltip="Noise texture on toolbar surfaces" />
               </>
             )}
 
             {tab === 'behavior' && (
               <>
+                {/* ─── Automation ─── */}
+                <label className="td-settings-section-title">Automation</label>
+
                 <label className="td-settings-label">Auto-close toolbar ({settings.autoCloseToolbar === 0 ? 'Off' : `${settings.autoCloseToolbar}s`})</label>
-                <input type="range" min={0} max={30} step={5} value={settings.autoCloseToolbar} onChange={(e) => settings.update({ autoCloseToolbar: +e.target.value })} className="td-settings-slider" />
+                <TipSlider min={0} max={30} step={5} value={settings.autoCloseToolbar} onChange={(v) => settings.update({ autoCloseToolbar: v })} tooltip="Collapse toolbar after inactivity — 0 to disable" />
 
                 <label className="td-settings-label">Auto-lock layout ({settings.autoLock === 0 ? 'Off' : `${settings.autoLock}s`})</label>
-                <input type="range" min={0} max={60} step={10} value={settings.autoLock} onChange={(e) => settings.update({ autoLock: +e.target.value })} className="td-settings-slider" />
+                <TipSlider min={0} max={60} step={10} value={settings.autoLock} onChange={(v) => settings.update({ autoLock: v })} tooltip="Lock board positions after inactivity — 0 to disable" />
+
+                <div className="td-settings-divider" />
+
+                {/* ─── Links ─── */}
+                <label className="td-settings-section-title">Links</label>
 
                 <label className="td-settings-label">Open links in</label>
                 <div className="td-settings-row">
@@ -233,11 +315,16 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                   <button className={`td-settings-pill ${!settings.openLinksNewTab ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ openLinksNewTab: false })}>Same tab</button>
                 </div>
 
-                <label className="td-settings-label">Default board width ({settings.defaultBoardW})</label>
-                <input type="range" min={20} max={60} value={settings.defaultBoardW} onChange={(e) => settings.update({ defaultBoardW: +e.target.value })} className="td-settings-slider" />
+                <div className="td-settings-divider" />
 
-                <label className="td-settings-label">Default board height ({settings.defaultBoardH})</label>
-                <input type="range" min={4} max={20} value={settings.defaultBoardH} onChange={(e) => settings.update({ defaultBoardH: +e.target.value })} className="td-settings-slider" />
+                {/* ─── Default Board Size ─── */}
+                <label className="td-settings-section-title">Default Board Size</label>
+
+                <label className="td-settings-label">Width ({settings.defaultBoardW})</label>
+                <TipSlider min={20} max={60} value={settings.defaultBoardW} onChange={(v) => settings.update({ defaultBoardW: v })} tooltip="Default grid width for new boards" />
+
+                <label className="td-settings-label">Height ({settings.defaultBoardH})</label>
+                <TipSlider min={4} max={20} value={settings.defaultBoardH} onChange={(v) => settings.update({ defaultBoardH: v })} tooltip="Default grid height for new boards" />
               </>
             )}
 
@@ -246,7 +333,25 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                 <label className="td-settings-label">Storage used</label>
                 <div className="td-settings-value">{storageUsage}</div>
                 <button className="td-settings-action" type="button" onClick={onResetOnboarding}>Re-run onboarding tour</button>
-                <button className="td-settings-action td-settings-danger" type="button" onClick={handleClearAll}>Factory reset (clear all data)</button>
+
+                <div className="td-settings-divider" />
+
+                {!confirmReset ? (
+                  <button className="td-settings-action td-settings-danger" type="button" onClick={handleClearAll}>
+                    Factory reset
+                  </button>
+                ) : (
+                  <div className="f-reset-confirm">
+                    <div className="f-reset-warning">
+                      <AlertTriangle size={14} strokeWidth={2} />
+                      <span>This permanently removes all Frontly data.</span>
+                    </div>
+                    <div className="f-reset-actions">
+                      <button className="f-reset-cancel" type="button" onClick={() => setConfirmReset(false)}>Cancel</button>
+                      <button className="f-reset-delete" type="button" onClick={handleClearAll}>Delete everything</button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
 

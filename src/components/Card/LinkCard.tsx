@@ -48,6 +48,18 @@ export function LinkCard({ link, onDelete, onRename, onTransfer, transferTargets
     position: 'relative',
   };
 
+  const [faviconFailed, setFaviconFailed] = useState(false);
+
+  // Generate a letter fallback from the domain
+  const getLetterFallback = () => {
+    try {
+      const hostname = new URL(link.url).hostname.replace('www.', '');
+      return hostname.charAt(0).toUpperCase();
+    } catch {
+      return link.title.charAt(0).toUpperCase() || '?';
+    }
+  };
+
   const fallbackSrc = getFaviconUrl(link.url, 32);
   const iconSrc = link.favicon?.trim() ? link.favicon : fallbackSrc;
 
@@ -131,22 +143,26 @@ export function LinkCard({ link, onDelete, onRename, onTransfer, transferTargets
           className="td-link-drag-area"
           {...listeners}
         >
-          <img
-            className="td-link-favicon"
-            src={iconSrc}
-            alt=""
-            draggable={false}
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              const img = e.currentTarget;
-              if (img.dataset.fallbackApplied === 'true') {
-                img.style.opacity = '0';
-                return;
-              }
-              img.dataset.fallbackApplied = 'true';
-              img.src = fallbackSrc;
-            }}
-          />
+          {faviconFailed ? (
+            <span className="f-favicon-letter">{getLetterFallback()}</span>
+          ) : (
+            <img
+              className="td-link-favicon"
+              src={iconSrc}
+              alt=""
+              draggable={false}
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                const img = e.currentTarget;
+                if (img.dataset.fallbackApplied === 'true') {
+                  setFaviconFailed(true);
+                  return;
+                }
+                img.dataset.fallbackApplied = 'true';
+                img.src = fallbackSrc;
+              }}
+            />
+          )}
         </div>
 
         {/* Link title — clickable to open URL, or inline rename */}

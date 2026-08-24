@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import type { TodoItem } from '../../lib/workspaceTypes';
 
 interface Props {
@@ -8,6 +9,8 @@ interface Props {
 
 export function TodoBoardContent({ todos, onChange }: Props) {
   const [newText, setNewText] = useState('');
+
+  const remaining = todos.filter((t) => !t.done).length;
 
   const addTodo = () => {
     if (!newText.trim()) return;
@@ -30,7 +33,20 @@ export function TodoBoardContent({ todos, onChange }: Props) {
 
   return (
     <div className="td-todo-content">
+      {/* Task count */}
+      {todos.length > 0 && (
+        <div className="f-todo-count">
+          {remaining === 0 ? 'All done' : `${remaining} remaining`}
+        </div>
+      )}
+
       <div className="td-todo-list">
+        {todos.length === 0 && (
+          <div className="f-todo-empty">
+            <CheckCircle2 size={16} strokeWidth={1.5} style={{ opacity: 0.35 }} />
+            <span>No tasks yet</span>
+          </div>
+        )}
         {todos.map((todo) => (
           <label key={todo.id} className={`td-todo-item ${todo.done ? 'is-done' : ''}`}>
             <input
@@ -47,6 +63,7 @@ export function TodoBoardContent({ todos, onChange }: Props) {
                 e.preventDefault();
                 removeTodo(todo.id);
               }}
+              aria-label="Remove task"
             >
               ×
             </button>
@@ -59,7 +76,7 @@ export function TodoBoardContent({ todos, onChange }: Props) {
           value={newText}
           onChange={(e) => setNewText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') addTodo(); }}
-          placeholder="Add task..."
+          placeholder="+ Add a task..."
         />
       </div>
     </div>

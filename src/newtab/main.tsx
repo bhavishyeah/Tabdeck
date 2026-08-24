@@ -7,7 +7,12 @@ import { useSettingsStore } from '../store/useSettingsStore';
 // Apply saved settings immediately before first render (no flash)
 const _s = useSettingsStore.getState();
 applyFontCSS(_s.fontFamily, _s.fontSize);
-applyGlassCSS(_s.glassBlur, _s.glassSaturation, _s.glassTint);
+applyGlassCSS(
+  _s.glassBlur, _s.glassSaturation, _s.glassTint,
+  _s.toolbarBlur, _s.toolbarSaturation, _s.toolbarTint,
+  _s.toolbarOpacity, _s.toolbarRadius, _s.toolbarGrain
+);
+document.documentElement.style.setProperty('--td-board-radius', `${_s.boardRadius}px`);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

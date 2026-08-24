@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { ArrowRightLeft, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Copy, Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { BoardItem, WorkspaceItem } from '../../lib/workspaceTypes';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -18,9 +18,14 @@ interface Props {
 }
 
 export function Board({ workspaceId, board, workspaces }: Props) {
-  const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink, setBoardColor, updateNoteContent, updateTodos, duplicateBoard } =
+  const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink, setBoardColor, updateNoteContent, updateTodos, duplicateBoard, toggleBoardHeader } =
     useWorkspaceStore();
-  const { textMode, boardOpacity, boardRadius, glassBlur, glassSaturation } = useSettingsStore();
+  const textMode = useSettingsStore((s) => s.textMode);
+  const boardOpacity = useSettingsStore((s) => s.boardOpacity);
+  const boardRadius = useSettingsStore((s) => s.boardRadius);
+  const glassBlur = useSettingsStore((s) => s.glassBlur);
+  const glassSaturation = useSettingsStore((s) => s.glassSaturation);
+  const grainIntensity = useSettingsStore((s) => s.grainIntensity);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -151,37 +156,49 @@ export function Board({ workspaceId, board, workspaces }: Props) {
   // Other workspaces to transfer to (exclude current)
   const otherWorkspaces = workspaces.filter((ws) => ws.id !== workspaceId);
 
+  // Memoize board style to avoid recalculating on every render
+  const boardStyle = useMemo((): React.CSSProperties => {
+    const baseStyle: React.CSSProperties = {
+      borderRadius: `${boardRadius}px`,
+      backdropFilter: `blur(${glassBlur}px) saturate(${glassSaturation}%)`,
+      WebkitBackdropFilter: `blur(${glassBlur}px) saturate(${glassSaturation}%)`,
+      border: '1px solid rgba(255, 255, 255, 0.2)',
+    };
+    if (board.color === 'clear') {
+      baseStyle.background = `rgba(255, 255, 255, 0.08)`;
+      baseStyle.border = '1px solid rgba(255, 255, 255, 0.15)';
+    } else if (board.color) {
+      const hex = board.color;
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      baseStyle.background = `rgba(${r}, ${g}, ${b}, ${boardOpacity})`;
+      baseStyle.borderColor = `${board.color}aa`;
+    } else {
+      baseStyle.background = `rgba(250, 248, 244, ${boardOpacity})`;
+    }
+    if (textMode === 'light' || board.color === 'clear') baseStyle.color = '#fff';
+    else if (textMode === 'dark') baseStyle.color = '#111';
+    else if (board.color) baseStyle.color = '#fff';
+    return baseStyle;
+  }, [boardRadius, glassBlur, glassSaturation, boardOpacity, textMode, board.color]);
+
   return (
     <section
       ref={mergedRef}
       className={`td-board-panel ${isOver ? 'is-over' : ''} ${showForm ? 'is-form-open' : ''}`}
-      style={(() => {
-        const baseStyle: React.CSSProperties = {
-          borderRadius: `${boardRadius}px`,
-          backdropFilter: `blur(${glassBlur}px) saturate(${glassSaturation}%)`,
-          WebkitBackdropFilter: `blur(${glassBlur}px) saturate(${glassSaturation}%)`,
-        };
-        if (board.color) {
-          const hex = board.color;
-          const r = parseInt(hex.slice(1, 3), 16);
-          const g = parseInt(hex.slice(3, 5), 16);
-          const b = parseInt(hex.slice(5, 7), 16);
-          baseStyle.background = `rgba(${r}, ${g}, ${b}, ${boardOpacity})`;
-          baseStyle.borderColor = `${board.color}aa`;
-        } else {
-          baseStyle.background = `rgba(250, 248, 244, ${boardOpacity})`;
-        }
-        if (textMode === 'light') baseStyle.color = '#fff';
-        else if (textMode === 'dark') baseStyle.color = '#111';
-        else if (board.color) baseStyle.color = '#fff';
-        return baseStyle;
-      })()}
-      onContextMenu={(board.type === 'clock' || board.type === 'weather') ? handleBoardNameContextMenu : undefined}
+      style={boardStyle}
+      onContextMenu={handleBoardNameContextMenu}
     >
+      {/* Grain overlay */}
+      {grainIntensity > 0 && (
+        <div className="td-board-grain" style={{ opacity: grainIntensity / 100 }} />
+      )}
+
       {/* Drag handle bar */}
       <div className="td-board-drag-bar" />
 
-      {(board.type !== 'clock' && board.type !== 'weather') && (
+      {(board.type !== 'clock' && board.type !== 'weather' && !board.hideHeader) && (
         <div className="td-board-top">
           {isRenaming ? (
             <input
@@ -194,13 +211,17 @@ export function Board({ workspaceId, board, workspaces }: Props) {
               spellCheck={false}
             />
           ) : (
-            <span
-              className="td-board-name-label"
-              onContextMenu={handleBoardNameContextMenu}
-              title="Right-click for options"
-            >
-              {board.name}
-            </span>
+            <>
+              <span
+                className="td-board-name-label"
+                title="Right-click for options"
+              >
+                {board.name}
+              </span>
+              {board.type !== 'note' && board.type !== 'todo' && board.links.length > 0 && (
+                <span className="f-board-count">{board.links.length}</span>
+              )}
+            </>
           )}
         </div>
       )}
@@ -210,7 +231,6 @@ export function Board({ workspaceId, board, workspaces }: Props) {
           className="td-note-textarea"
           value={board.noteContent || ''}
           onChange={(e) => updateNoteContent(workspaceId, board.id, e.target.value)}
-          onContextMenu={handleBoardNameContextMenu}
           placeholder="Write your note here..."
           spellCheck={false}
         />
@@ -226,7 +246,9 @@ export function Board({ workspaceId, board, workspaces }: Props) {
       ) : (
         <div className="td-board-links">
           {board.links.length === 0 ? (
-            <div className="td-board-empty">Drop here</div>
+            <div className="td-board-empty">
+              <span>Right-click to add links</span>
+            </div>
           ) : (
             <SortableContext
               items={board.links.map((l) => l.id)}
@@ -313,15 +335,28 @@ export function Board({ workspaceId, board, workspaces }: Props) {
                 <span>Rename board</span>
               </button>
             )}
+            {board.type !== 'clock' && board.type !== 'weather' && (
+              <button
+                className="td-link-context-item"
+                type="button"
+                onClick={() => {
+                  toggleBoardHeader(workspaceId, board.id);
+                  setBoardContextMenu(null);
+                }}
+              >
+                {board.hideHeader ? <Eye size={13} strokeWidth={2} /> : <EyeOff size={13} strokeWidth={2} />}
+                <span>{board.hideHeader ? 'Show header' : 'Hide header'}</span>
+              </button>
+            )}
             <div className="td-context-divider" />
             <div className="td-context-section-label">Color</div>
             <div className="td-board-color-picks">
-              {['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'].map((c) => (
+              {['', 'clear', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'].map((c) => (
                 <button
                   key={c}
                   className={`td-board-color-dot ${board.color === c || (!board.color && c === '') ? 'is-active' : ''}`}
                   type="button"
-                  style={{ background: c || 'rgba(250,248,244,0.92)' }}
+                  style={{ background: c === 'clear' ? 'linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1))' : c || 'rgba(250,248,244,0.92)', border: c === 'clear' ? '2px dashed rgba(255,255,255,0.5)' : undefined }}
                   onClick={() => {
                     setBoardColor(workspaceId, board.id, c || undefined);
                     setBoardContextMenu(null);

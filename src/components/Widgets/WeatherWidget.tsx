@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Cloud, CloudRain, Sun, CloudSnow, Wind } from 'lucide-react';
+import { Cloud, CloudRain, Sun, CloudSnow, Wind, MapPin, RefreshCw } from 'lucide-react';
 
 interface WeatherData {
   temp: number;
@@ -8,16 +8,17 @@ interface WeatherData {
   icon: string;
 }
 
+type WeatherState = 'loading' | 'success' | 'error' | 'denied';
+
 export function WeatherWidget() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [state, setState] = useState<WeatherState>('loading');
 
-  useEffect(() => {
-    // Try to get location and fetch weather
+  const fetchWeather = () => {
+    setState('loading');
+
     if (!navigator.geolocation) {
-      setError('Geolocation not supported');
-      setLoading(false);
+      setState('error');
       return;
     }
 
@@ -25,7 +26,6 @@ export function WeatherWidget() {
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
-          // Using open-meteo (free, no API key needed)
           const res = await fetch(
             `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
           );
@@ -33,60 +33,90 @@ export function WeatherWidget() {
           const current = data.current;
           const weatherCode = current.weather_code;
 
-          let description = 'Clear';
+          let description = 'Clear sky';
           let icon = 'sun';
-          if (weatherCode >= 1 && weatherCode <= 3) { description = 'Cloudy'; icon = 'cloud'; }
+          if (weatherCode >= 1 && weatherCode <= 3) { description = 'Partly cloudy'; icon = 'cloud'; }
+          if (weatherCode >= 45 && weatherCode <= 48) { description = 'Foggy'; icon = 'cloud'; }
           if (weatherCode >= 51 && weatherCode <= 67) { description = 'Rainy'; icon = 'rain'; }
-          if (weatherCode >= 71 && weatherCode <= 77) { description = 'Snow'; icon = 'snow'; }
+          if (weatherCode >= 71 && weatherCode <= 77) { description = 'Snowing'; icon = 'snow'; }
           if (weatherCode >= 80 && weatherCode <= 82) { description = 'Showers'; icon = 'rain'; }
-          if (weatherCode >= 95) { description = 'Stormy'; icon = 'wind'; }
+          if (weatherCode >= 95) { description = 'Thunderstorm'; icon = 'wind'; }
 
           setWeather({
             temp: Math.round(current.temperature_2m),
             description,
-            city: data.timezone?.split('/')[1]?.replace('_', ' ') || 'Your location',
+            city: data.timezone?.split('/')[1]?.replace(/_/g, ' ') || 'Your location',
             icon,
           });
+          setState('success');
         } catch {
-          setError('Failed to load weather');
+          setState('error');
         }
-        setLoading(false);
       },
-      () => {
-        setError('Location access denied');
-        setLoading(false);
-      },
-      { timeout: 5000 }
+      () => setState('denied'),
+      { timeout: 8000 }
     );
-  }, []);
+  };
 
-  const getIcon = (icon: string) => {
+  useEffect(() => { fetchWeather(); }, []);
+
+  const getIcon = (icon: string, size = 28) => {
+    const props = { size, strokeWidth: 1.5 };
     switch (icon) {
-      case 'cloud': return <Cloud size={24} />;
-      case 'rain': return <CloudRain size={24} />;
-      case 'snow': return <CloudSnow size={24} />;
-      case 'wind': return <Wind size={24} />;
-      default: return <Sun size={24} />;
+      case 'cloud': return <Cloud {...props} />;
+      case 'rain': return <CloudRain {...props} />;
+      case 'snow': return <CloudSnow {...props} />;
+      case 'wind': return <Wind {...props} />;
+      default: return <Sun {...props} />;
     }
   };
 
-  if (loading) {
-    return <div className="td-weather-widget"><span className="td-weather-loading">Loading...</span></div>;
+  // Loading skeleton
+  if (state === 'loading') {
+    return (
+      <div className="f-weather f-weather--loading">
+        <div className="f-weather-skeleton f-weather-skeleton--icon" />
+        <div className="f-weather-skeleton f-weather-skeleton--temp" />
+        <div className="f-weather-skeleton f-weather-skeleton--text" />
+      </div>
+    );
   }
 
-  if (error) {
-    return <div className="td-weather-widget"><span className="td-weather-error">{error}</span></div>;
+  // Location denied
+  if (state === 'denied') {
+    return (
+      <div className="f-weather f-weather--state">
+        <MapPin size={20} strokeWidth={1.5} style={{ opacity: 0.5 }} />
+        <span className="f-weather-state-text">Location unavailable</span>
+        <button className="f-weather-retry" type="button" onClick={fetchWeather}>
+          <RefreshCw size={12} strokeWidth={2} /> Retry
+        </button>
+      </div>
+    );
+  }
+
+  // Error
+  if (state === 'error') {
+    return (
+      <div className="f-weather f-weather--state">
+        <Cloud size={20} strokeWidth={1.5} style={{ opacity: 0.5 }} />
+        <span className="f-weather-state-text">Weather unavailable</span>
+        <button className="f-weather-retry" type="button" onClick={fetchWeather}>
+          <RefreshCw size={12} strokeWidth={2} /> Try again
+        </button>
+      </div>
+    );
   }
 
   if (!weather) return null;
 
   return (
-    <div className="td-weather-widget">
-      <div className="td-weather-icon">{getIcon(weather.icon)}</div>
-      <div className="td-weather-info">
-        <span className="td-weather-temp">{weather.temp}°C</span>
-        <span className="td-weather-desc">{weather.description}</span>
-        <span className="td-weather-city">{weather.city}</span>
+    <div className="f-weather">
+      <div className="f-weather-icon">{getIcon(weather.icon)}</div>
+      <div className="f-weather-body">
+        <span className="f-weather-temp">{weather.temp}°</span>
+        <span className="f-weather-desc">{weather.description}</span>
+        <span className="f-weather-city">{weather.city}</span>
       </div>
     </div>
   );

@@ -12,9 +12,18 @@ export interface AppSettings {
   openLinksNewTab: boolean;
   defaultBoardW: number;
   defaultBoardH: number;
+  // Board glass
   glassBlur: number;
   glassSaturation: number;
-  glassTint: number; // 0-100, controls rgba white alpha for toolbar pills
+  glassTint: number;
+  grainIntensity: number;
+  // Toolbar glass
+  toolbarOpacity: number;
+  toolbarRadius: number;
+  toolbarBlur: number;
+  toolbarSaturation: number;
+  toolbarTint: number;
+  toolbarGrain: number;
 }
 
 const STORAGE_KEY = 'tabdeck-settings';
@@ -29,11 +38,18 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoCloseToolbar: 0,
   autoLock: 0,
   openLinksNewTab: true,
-  defaultBoardW: 34,
-  defaultBoardH: 7,
+  defaultBoardW: 20,
+  defaultBoardH: 8,
   glassBlur: 5,
   glassSaturation: 100,
   glassTint: 40,
+  grainIntensity: 0,
+  toolbarOpacity: 0.4,
+  toolbarRadius: 50,
+  toolbarBlur: 5,
+  toolbarSaturation: 100,
+  toolbarTint: 40,
+  toolbarGrain: 0,
 };
 
 function loadFromStorage(): AppSettings {

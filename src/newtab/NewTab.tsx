@@ -7,7 +7,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import RGL, { WidthProvider } from 'react-grid-layout';
+import RGL from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { CheckSquare, Clock as ClockIcon, CloudSun, LayoutGrid, Plus, Search, StickyNote } from 'lucide-react';
@@ -23,9 +23,11 @@ import { storeVideoBlob, deleteVideoBlob, getVideoBlob } from '../lib/videoStora
 import { pushState, undo, redo } from '../lib/undoManager';
 import { useUiStore } from '../store/useUiStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
+import { useGridDimensions } from '../lib/useGridDimensions';
 import '../styles/global.css';
 
-const ReactGridLayout = WidthProvider(RGL);
+// Old grid system constants for migration
+const OLD_COLS = 172;
 
 const WORKSPACE_STORE_KEY = 'tabdeck-workspaces';
 const LEGACY_BOARD_STORE_KEY = 'tabdeck-board-store';
@@ -141,17 +143,28 @@ export function NewTab() {
   const [toolbarOpen, setToolbarOpen] = useState(true);
   const [widgetsOpen, setWidgetsOpen] = useState(false);
   const appSettings = useSettingsStore();
+  const grid = useGridDimensions();
 
   // Apply all CSS settings on mount and whenever they change
   useEffect(() => {
     applyFontCSS(appSettings.fontFamily, appSettings.fontSize);
-    applyGlassCSS(appSettings.glassBlur, appSettings.glassSaturation, appSettings.glassTint);
+    applyGlassCSS(
+      appSettings.glassBlur, appSettings.glassSaturation, appSettings.glassTint,
+      appSettings.toolbarBlur, appSettings.toolbarSaturation, appSettings.toolbarTint,
+      appSettings.toolbarOpacity, appSettings.toolbarRadius, appSettings.toolbarGrain
+    );
   }, [
     appSettings.fontFamily,
     appSettings.fontSize,
     appSettings.glassBlur,
     appSettings.glassSaturation,
     appSettings.glassTint,
+    appSettings.toolbarBlur,
+    appSettings.toolbarSaturation,
+    appSettings.toolbarTint,
+    appSettings.toolbarOpacity,
+    appSettings.toolbarRadius,
+    appSettings.toolbarGrain,
   ]);
 
   // Auto-close toolbar timer
@@ -309,20 +322,6 @@ export function NewTab() {
     };
   }, []);
 
-  // Auto-close toolbar
-  useEffect(() => {
-    if (!appSettings.autoCloseToolbar || !toolbarOpen) return;
-    const timer = setTimeout(() => setToolbarOpen(false), appSettings.autoCloseToolbar * 1000);
-    return () => clearTimeout(timer);
-  }, [toolbarOpen, appSettings.autoCloseToolbar]);
-
-  // Auto-lock layout
-  useEffect(() => {
-    if (!appSettings.autoLock) return;
-    const timer = setTimeout(() => setLayoutLocked(true), appSettings.autoLock * 1000);
-    return () => clearTimeout(timer);
-  }, [appSettings.autoLock]);
-
   useEffect(() => {
     storageGet([QUICK_SAVE_BOARD_KEY])
       .then((result) => {
@@ -438,54 +437,55 @@ export function NewTab() {
     moveLink(activeWorkspace.id, activeId, overId, fromBoardId, toBoardId);
   };
 
-  // Generate layout for react-grid-layout (172×85 hyper-dense grid)
-  // Cell: 6×6px, margin: [4,4]. Zero leftover pixels.
-  // Width: 172×6 + 171×4 = 1716px. Height: 85×6 + 84×4 = 846px.
-  // Board w:34 = 336px. Board h:23 = 226px (fits 7 links).
-  const CELL = 6;
-  const GAP = 4;
-  const HEADER_PX = 45;
-  const LINK_PX = 26;
+  // Pure 24px grid system — each row = 24px, each link = 1 row, board name = 1 row
+  // h = 1 (name) + linkCount, or just linkCount if header hidden
 
-  const getContentH = (linkCount: number) => {
-    const contentPx = HEADER_PX + linkCount * LINK_PX;
-    // Convert px to grid units: h units = ceil(contentPx / (CELL + GAP))
-    return Math.max(Math.ceil(contentPx / (CELL + GAP)), 5);
+  // Default board width in grid units
+  const DEFAULT_W = 14; // 14 × 24px = 336px
+
+  const getContentH = (linkCount: number, hideHeader?: boolean) => {
+    const headerRows = hideHeader ? 0 : 1;
+    return Math.max(headerRows + linkCount, 3);
   };
 
   const gridLayout = useMemo(() => {
     if (!activeWorkspace) return [];
 
     return visibleBoards.map((board, index) => {
-      const contentH = getContentH(board.links.length);
+      // Always calculate height from actual content
+      const contentH = getContentH(board.links.length, board.hideHeader);
 
       if (board.layout) {
+        // Migrate old 172-col layouts to new column count
+        const needsMigration = board.layout.w > grid.cols || board.layout.x + board.layout.w > grid.cols + 5;
+        const x = needsMigration ? Math.round(board.layout.x * grid.cols / OLD_COLS) : board.layout.x;
+        const w = needsMigration ? Math.round(board.layout.w * grid.cols / OLD_COLS) : board.layout.w;
+
         return {
           i: board.id,
-          x: board.layout.x,
+          x: Math.min(x, grid.cols - w),
           y: board.layout.y,
-          w: board.layout.w,
-          h: board.layout.h,
-          minW: 10,
-          minH: 5,
+          w: Math.max(w, 4),
+          h: contentH,
+          minW: 4,
         };
       }
 
-      // Default: spread boards in rows of 5
-      const col = index % 5;
-      const row = Math.floor(index / 5);
+      // Default: spread boards in rows
+      const boardsPerRow = Math.floor(grid.cols / (DEFAULT_W + 1));
+      const col = index % Math.max(boardsPerRow, 1);
+      const row = Math.floor(index / Math.max(boardsPerRow, 1));
 
       return {
         i: board.id,
-        x: col * 34,
-        y: row * (contentH + 2),
-        w: 34,
+        x: col * (DEFAULT_W + 1),
+        y: row * (contentH + 1),
+        w: DEFAULT_W,
         h: contentH,
-        minW: 10,
-        minH: 5,
+        minW: 4,
       };
     });
-  }, [activeWorkspace, visibleBoards]);
+  }, [activeWorkspace, visibleBoards, grid.cols]);
 
   const handleGridLayoutChange = (layout: RGL.Layout[]) => {
     if (!activeWorkspace) return;
@@ -805,7 +805,7 @@ const handleImportBookmarks = async (folderId?: string) => {
           title="Toggle toolbar"
           aria-label="Toggle toolbar"
         >
-          <img src="/icons/icon32.png" alt="TabDeck" width="22" height="22" style={{ borderRadius: '4px' }} />
+          <img src="/icons/icon128.png" alt="TabDeck" />
         </button>
 
         {/* Toolbar row — slides in/out */}
@@ -933,7 +933,12 @@ const handleImportBookmarks = async (folderId?: string) => {
             <button
               className={`td-lock-btn ${layoutLocked ? 'is-locked' : ''}`}
               type="button"
-              onClick={() => setLayoutLocked((v) => !v)}
+              onClick={() => {
+                setLayoutLocked((v) => {
+                  showToast(!v ? 'Layout locked' : 'Layout unlocked', 'info');
+                  return !v;
+                });
+              }}
               title={layoutLocked ? 'Unlock layout' : 'Lock layout'}
               aria-label={layoutLocked ? 'Unlock layout' : 'Lock layout'}
             >
@@ -969,13 +974,13 @@ const handleImportBookmarks = async (folderId?: string) => {
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <ReactGridLayout
+          <RGL
             className="td-board-grid"
             layout={gridLayout}
-            cols={172}
-            rowHeight={6}
-            maxRows={85}
-            margin={[4, 4]}
+            cols={grid.cols}
+            rowHeight={24}
+            width={grid.width}
+            margin={[0, 0]}
             containerPadding={[0, 0]}
             isDraggable={!layoutLocked}
             isResizable={!layoutLocked}
@@ -983,10 +988,12 @@ const handleImportBookmarks = async (folderId?: string) => {
             compactType={null}
             preventCollision={true}
             autoSize={false}
-            style={{ minHeight: 'calc(100vh - 80px)' }}
+            style={{ height: grid.height, width: grid.width }}
             draggableHandle=".td-board-drag-bar"
             onDragStop={handleGridLayoutChange}
             onResizeStop={handleGridLayoutChange}
+            resizeHandles={['e']}
+            resizeHandle={<span className="f-resize-bar" />}
           >
             {visibleBoards.map((board) => (
               <div key={board.id}>
@@ -997,7 +1004,7 @@ const handleImportBookmarks = async (folderId?: string) => {
                 />
               </div>
             ))}
-          </ReactGridLayout>
+          </RGL>
         </DndContext>
       )}
 

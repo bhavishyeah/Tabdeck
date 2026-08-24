@@ -55,6 +55,7 @@ interface WorkspaceState {
   updateTodos: (workspaceId: string, boardId: string, todos: import('../lib/workspaceTypes').TodoItem[]) => void;
   renameBoard: (workspaceId: string, boardId: string, name: string) => void;
   setBoardColor: (workspaceId: string, boardId: string, color: string | undefined) => void;
+  toggleBoardHeader: (workspaceId: string, boardId: string) => void;
   removeBoard: (workspaceId: string, boardId: string) => void;
   transferBoard: (fromWorkspaceId: string, toWorkspaceId: string, boardId: string) => void;
   reorderBoards: (workspaceId: string, fromIndex: number, toIndex: number) => void;
@@ -131,9 +132,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
             const s = useSettingsStore.getState();
-            const col = workspace.boards.length % Math.floor(172 / s.defaultBoardW);
-            const row = Math.floor(workspace.boards.length / Math.floor(172 / s.defaultBoardW));
-            const layout = { x: col * s.defaultBoardW, y: row * (s.defaultBoardH + 2), w: s.defaultBoardW, h: s.defaultBoardH };
+            const gridCols = Math.floor((window.innerWidth - 48) / 24);
+            const gridRows = Math.floor((window.innerHeight - 72) / 24);
+            const boardW = Math.min(s.defaultBoardW, gridCols - 1);
+            const boardH = Math.min(s.defaultBoardH, gridRows - 1);
+            const boardsPerRow = Math.max(Math.floor(gridCols / (boardW + 1)), 1);
+            const col = workspace.boards.length % boardsPerRow;
+            const row = Math.floor(workspace.boards.length / boardsPerRow);
+            const x = col * (boardW + 1);
+            const y = row * (boardH + 1);
+            // Clamp within canvas
+            const layout = { x: Math.min(x, gridCols - boardW), y: Math.min(y, gridRows - boardH), w: boardW, h: boardH };
             return {
               ...workspace,
               boards: [...workspace.boards, { ...createBoard(name), layout }],
@@ -147,9 +156,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           workspaces: state.workspaces.map((workspace) => {
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
-            const col = workspace.boards.length % 5;
-            const row = Math.floor(workspace.boards.length / 5);
-            const layout = { x: col * 34, y: row * 12, w: 34, h: 7 };
+            const gridCols = Math.floor((window.innerWidth - 48) / 24);
+            const gridRows = Math.floor((window.innerHeight - 72) / 24);
+            const s = useSettingsStore.getState();
+            const w = Math.min(s.defaultBoardW, gridCols - 1);
+            const h = Math.min(s.defaultBoardH, gridRows - 1);
+            const boardsPerRow = Math.max(Math.floor(gridCols / (w + 1)), 1);
+            const col = workspace.boards.length % boardsPerRow;
+            const row = Math.floor(workspace.boards.length / boardsPerRow);
+            const layout = { x: Math.min(col * (w + 1), gridCols - w), y: Math.min(row * (h + 1), gridRows - h), w, h };
             return {
               ...workspace,
               boards: [...workspace.boards, { ...createBoard(name), type: 'note' as const, noteContent: '', layout }],
@@ -163,9 +178,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           workspaces: state.workspaces.map((workspace) => {
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
-            const col = workspace.boards.length % 5;
-            const row = Math.floor(workspace.boards.length / 5);
-            const layout = { x: col * 34, y: row * 12, w: 34, h: 7 };
+            const gridCols = Math.floor((window.innerWidth - 48) / 24);
+            const gridRows = Math.floor((window.innerHeight - 72) / 24);
+            const s = useSettingsStore.getState();
+            const w = Math.min(s.defaultBoardW, gridCols - 1);
+            const h = Math.min(s.defaultBoardH, gridRows - 1);
+            const boardsPerRow = Math.max(Math.floor(gridCols / (w + 1)), 1);
+            const col = workspace.boards.length % boardsPerRow;
+            const row = Math.floor(workspace.boards.length / boardsPerRow);
+            const layout = { x: Math.min(col * (w + 1), gridCols - w), y: Math.min(row * (h + 1), gridRows - h), w, h };
             return {
               ...workspace,
               boards: [...workspace.boards, { ...createBoard(name), type: 'todo' as const, todos: [], layout }],
@@ -179,9 +200,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           workspaces: state.workspaces.map((workspace) => {
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
-            const col = workspace.boards.length % 5;
-            const row = Math.floor(workspace.boards.length / 5);
-            const layout = { x: col * 34, y: row * 12, w: 34, h: 7 };
+            const gridCols = Math.floor((window.innerWidth - 48) / 24);
+            const gridRows = Math.floor((window.innerHeight - 72) / 24);
+            const s = useSettingsStore.getState();
+            const w = Math.min(s.defaultBoardW, gridCols - 1);
+            const h = Math.min(s.defaultBoardH, gridRows - 1);
+            const boardsPerRow = Math.max(Math.floor(gridCols / (w + 1)), 1);
+            const col = workspace.boards.length % boardsPerRow;
+            const row = Math.floor(workspace.boards.length / boardsPerRow);
+            const layout = { x: Math.min(col * (w + 1), gridCols - w), y: Math.min(row * (h + 1), gridRows - h), w, h };
             return {
               ...workspace,
               boards: [...workspace.boards, { ...createBoard('Clock'), type: 'clock' as const, layout }],
@@ -275,6 +302,23 @@ export const useWorkspaceStore = create<WorkspaceState>()(
                   boards: workspace.boards.map((board) =>
                     board.id === boardId
                       ? { ...board, color, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
+      toggleBoardHeader: (workspaceId: string, boardId: string) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, hideHeader: !board.hideHeader, updatedAt: now() }
                       : board
                   ),
                   updatedAt: now(),

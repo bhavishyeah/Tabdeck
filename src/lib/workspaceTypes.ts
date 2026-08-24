@@ -17,6 +17,7 @@ export interface BoardItem {
   name: string;
   type?: 'links' | 'note' | 'todo' | 'weather' | 'clock';
   color?: string;
+  hideHeader?: boolean;
   noteContent?: string;
   todos?: TodoItem[];
   links: LinkItem[];

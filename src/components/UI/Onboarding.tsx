@@ -14,44 +14,32 @@ interface Step {
 const steps: Step[] = [
   {
     target: '',
-    title: 'Welcome to TabDeck',
-    description: 'Your new tab is now a beautiful, draggable bento grid for organizing bookmarks. Let me show you around!',
+    title: 'Welcome to Frontly',
+    description: 'Your new tab is now your workspace. Organize bookmarks, notes, and widgets in a beautiful bento grid.',
     position: 'bottom',
-  },
-  {
-    target: '.td-create-board-btn',
-    title: 'Create Boards & Notes',
-    description: 'Click + for a bookmark board, or the sticky note icon for a note board. Right-click board names for more options.',
-    position: 'bottom',
-  },
-  {
-    target: '.td-toolbar-trigger',
-    title: 'Toolbar Menu (⋯)',
-    description: 'Access: Import Bookmarks, Export/Import JSON backup, Set wallpaper (image/GIF/video), Clear wallpaper.',
-    position: 'left',
   },
   {
     target: '.td-workspace-tabs',
     title: 'Workspaces',
-    description: 'Create workspaces to organize contexts. Right-click tabs to rename, export as JSON, or delete.',
+    description: 'Separate your projects, personal links, and everything else. Right-click a tab to rename or export it.',
     position: 'bottom',
   },
   {
-    target: '.td-search-input',
-    title: 'Search',
-    description: 'Instantly filter boards and links by keyword.',
+    target: '.td-create-board-btn',
+    title: 'Boards & Widgets',
+    description: 'Create bookmark boards, notes, todos, weather, and clock widgets. Drag to rearrange, resize from corners.',
     position: 'bottom',
   },
   {
-    target: '.td-lock-btn',
-    title: 'Lock Layout (Ctrl+M)',
-    description: 'Lock to prevent accidental moves. Unlock to rearrange boards freely.',
-    position: 'bottom',
+    target: '.td-toolbar-trigger',
+    title: 'Toolbar',
+    description: 'Import browser bookmarks, set wallpapers (image, GIF, or video), and export backups from here.',
+    position: 'left',
   },
   {
     target: '',
-    title: 'Keyboard Shortcuts',
-    description: 'Ctrl+B: New board\nCtrl+Shift+B: New note\nCtrl+M: Lock/Unlock\nCtrl+Z: Undo\nCtrl+Shift+Z: Redo\nCtrl+Shift+Y: Quick save tab',
+    title: 'You\'re ready',
+    description: 'Right-click boards for options. Use Ctrl+Z to undo, Alt+L to lock layout. Check Settings (bottom-right) for more.',
     position: 'bottom',
   },
 ];
@@ -61,6 +49,7 @@ export function Onboarding({ onComplete }: Props) {
   const [spotlightRect, setSpotlightRect] = useState<DOMRect | null>(null);
 
   const step = steps[currentStep];
+  const isFirst = currentStep === 0;
   const isLast = currentStep === steps.length - 1;
 
   useEffect(() => {
@@ -71,8 +60,7 @@ export function Onboarding({ onComplete }: Props) {
 
     const el = document.querySelector(step.target);
     if (el) {
-      const rect = el.getBoundingClientRect();
-      setSpotlightRect(rect);
+      setSpotlightRect(el.getBoundingClientRect());
     } else {
       setSpotlightRect(null);
     }
@@ -95,13 +83,9 @@ export function Onboarding({ onComplete }: Props) {
       case 'bottom': {
         let top = spotlightRect.bottom + pad;
         let left = spotlightRect.left + spotlightRect.width / 2 - tooltipW / 2;
-        // Clamp horizontal
         if (left < 12) left = 12;
         if (left + tooltipW > vw - 12) left = vw - 12 - tooltipW;
-        // Clamp vertical — flip to top if no room below
-        if (top + tooltipH > vh - 12) {
-          top = spotlightRect.top - pad - tooltipH;
-        }
+        if (top + tooltipH > vh - 12) top = spotlightRect.top - pad - tooltipH;
         style = { top, left };
         break;
       }
@@ -152,6 +136,9 @@ export function Onboarding({ onComplete }: Props) {
       )}
 
       <div className="td-onboarding-tooltip" style={getTooltipStyle()}>
+        <div className="td-onboarding-step-num">
+          {currentStep + 1} / {steps.length}
+        </div>
         <h3 className="td-onboarding-title">{step.title}</h3>
         <p className="td-onboarding-desc">{step.description}</p>
 
@@ -160,13 +147,13 @@ export function Onboarding({ onComplete }: Props) {
             {steps.map((_, i) => (
               <span
                 key={i}
-                className={`td-onboarding-dot ${i === currentStep ? 'is-active' : ''}`}
+                className={`td-onboarding-dot ${i === currentStep ? 'is-active' : ''} ${i < currentStep ? 'is-done' : ''}`}
               />
             ))}
           </div>
 
           <div className="td-onboarding-actions">
-            {currentStep > 0 && (
+            {!isFirst && (
               <button
                 className="td-onboarding-btn td-onboarding-back"
                 type="button"
@@ -183,7 +170,7 @@ export function Onboarding({ onComplete }: Props) {
                 else setCurrentStep((s) => s + 1);
               }}
             >
-              {isLast ? 'Done' : 'Next'}
+              {isFirst ? "Let's go" : isLast ? 'Finish' : 'Next'}
             </button>
           </div>
         </div>
