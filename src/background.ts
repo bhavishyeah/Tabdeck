@@ -39,10 +39,55 @@ type LegacyBoardStore = {
   };
 };
 
-const WORKSPACE_STORE_KEY = 'tabdeck-workspaces';
-const LEGACY_BOARD_STORE_KEY = 'tabdeck-board-store';
-const QUICK_SAVE_BOARD_KEY = 'tabdeck-quick-save-board-id';
-const DEBUG_KEY = 'tabdeck-last-quick-save-debug';
+const WORKSPACE_STORE_KEY = 'frontly-workspaces';
+const LEGACY_BOARD_STORE_KEY = 'frontly-board-store';
+const QUICK_SAVE_BOARD_KEY = 'frontly-quick-save-board-id';
+const DEBUG_KEY = 'frontly-last-quick-save-debug';
+
+// Old TabDeck key names — checked once for migration
+const OLD_WORKSPACE_KEY = 'tabdeck-workspaces';
+const OLD_BOARD_KEY = 'tabdeck-board-store';
+const OLD_QUICK_SAVE_KEY = 'tabdeck-quick-save-board-id';
+const MIGRATION_DONE_KEY = 'frontly-migrated-from-tabdeck';
+
+/**
+ * One-time migration: copy tabdeck-* chrome.storage keys to frontly-* equivalents.
+ * Runs at the start of saveCurrentTab so it covers users who never opened a new tab
+ * after the rename (e.g. users who only use the keyboard shortcut).
+ */
+async function runBackgroundMigrationIfNeeded() {
+  const flagResult = await chrome.storage.local.get(MIGRATION_DONE_KEY);
+  if (flagResult[MIGRATION_DONE_KEY]) return;
+
+  const oldData = await chrome.storage.local.get([OLD_WORKSPACE_KEY, OLD_BOARD_KEY, OLD_QUICK_SAVE_KEY]);
+  const toWrite: Record<string, unknown> = { [MIGRATION_DONE_KEY]: true };
+  const toRemove: string[] = [];
+
+  if (oldData[OLD_WORKSPACE_KEY] !== undefined) {
+    const existing = await chrome.storage.local.get(WORKSPACE_STORE_KEY);
+    if (!existing[WORKSPACE_STORE_KEY]) {
+      toWrite[WORKSPACE_STORE_KEY] = oldData[OLD_WORKSPACE_KEY];
+    }
+    toRemove.push(OLD_WORKSPACE_KEY);
+  }
+  if (oldData[OLD_BOARD_KEY] !== undefined) {
+    const existing = await chrome.storage.local.get(LEGACY_BOARD_STORE_KEY);
+    if (!existing[LEGACY_BOARD_STORE_KEY]) {
+      toWrite[LEGACY_BOARD_STORE_KEY] = oldData[OLD_BOARD_KEY];
+    }
+    toRemove.push(OLD_BOARD_KEY);
+  }
+  if (oldData[OLD_QUICK_SAVE_KEY] !== undefined) {
+    const existing = await chrome.storage.local.get(QUICK_SAVE_BOARD_KEY);
+    if (!existing[QUICK_SAVE_BOARD_KEY]) {
+      toWrite[QUICK_SAVE_BOARD_KEY] = oldData[OLD_QUICK_SAVE_KEY];
+    }
+    toRemove.push(OLD_QUICK_SAVE_KEY);
+  }
+
+  await chrome.storage.local.set(toWrite);
+  if (toRemove.length > 0) await chrome.storage.local.remove(toRemove);
+}
 
 function now() {
   return Date.now();
@@ -140,7 +185,7 @@ async function notify(message: string) {
   try {
     await chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icon-128.png',
+    iconUrl: 'icons/icon128.png',
       title: 'Frontly',
       message,
     });
@@ -151,6 +196,9 @@ async function notify(message: string) {
 
 async function saveCurrentTab() {
   try {
+    // Migrate old tabdeck-* keys if this is the first run after renaming
+    await runBackgroundMigrationIfNeeded();
+
     const [tab] = await chrome.tabs.query({
       active: true,
       currentWindow: true,
@@ -308,11 +356,11 @@ async function saveCurrentTab() {
   }
 }
 
-const TABDECK_PAGE_URL = chrome.runtime.getURL('index.html');
+const FRONTLY_PAGE_URL = chrome.runtime.getURL('index.html');
 
 chrome.action.onClicked.addListener(async () => {
   const tabs = await chrome.tabs.query({});
-  const existing = tabs.find((tab) => tab.url === TABDECK_PAGE_URL);
+  const existing = tabs.find((tab) => tab.url === FRONTLY_PAGE_URL);
 
   if (existing?.id) {
     await chrome.tabs.update(existing.id, { active: true });
@@ -323,13 +371,13 @@ chrome.action.onClicked.addListener(async () => {
   }
 
   await chrome.tabs.create({
-    url: TABDECK_PAGE_URL,
+    url: FRONTLY_PAGE_URL,
   });
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
   await chrome.storage.local.set({
-    tabdeckCommandDebug: {
+    frontlyCommandDebug: {
       command,
       firedAt: Date.now(),
     },

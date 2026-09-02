@@ -81,7 +81,7 @@ export function Toolbar({
 
     setQuickSaveBoardId(nextBoard.id);
     await chrome.storage.local.set({
-      'tabdeck-quick-save-board-id': nextBoard.id,
+      'frontly-quick-save-board-id': nextBoard.id,
     });
 
     showToast(`Quick Save: ${nextBoard.name}`, 'info');

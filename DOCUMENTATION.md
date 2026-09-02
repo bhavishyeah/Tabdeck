@@ -2,19 +2,19 @@
 
 ## Overview
 
-Frontly is a Chrome extension that replaces your new tab page with a powerful, visually stunning bento-grid bookmark and productivity manager. It transforms the blank new tab into an organized dashboard where you can manage bookmarks, notes, todos, and widgets — all with a draggable, resizable grid layout.
+Frontly is a Chrome extension that replaces your new tab page with a draggable, resizable bento-grid dashboard. Manage bookmarks, notes, todos, and widgets — all arranged on a precise 12px grid, with full glass-morphism theming, live wallpapers, and per-workspace layouts.
 
 ---
 
 ## Installation
 
-### From GitHub (Developer Mode)
-1. Download `release/Frontly-v4.1.0.zip` from the repository
+### From Release
+1. Download the latest zip from the `release/` folder
 2. Unzip the file
 3. Open Chrome → `chrome://extensions`
 4. Enable **Developer mode** (top-right toggle)
 5. Click **Load unpacked**
-6. Select the unzipped folder
+6. Select the unzipped `dist/` folder
 7. Open a new tab — Frontly is ready
 
 ### Development Setup
@@ -22,282 +22,323 @@ Frontly is a Chrome extension that replaces your new tab page with a powerful, v
 git clone https://github.com/bhavishyeah/Frontly.git
 cd Frontly
 npm install
-npm run dev    # Hot reload development
-npm run build  # Production build → /dist
+npm run build   # Production build → /dist
 ```
 
 ---
 
-## Core Features
+## Grid System
 
-### 1. Bento Grid Layout
-- **172×85 hyper-dense grid** with 6×6px square cells
-- Boards can be placed anywhere on the grid
-- Drag boards by the top bar to reposition
-- Resize boards from the bottom-right corner
-- `preventCollision: true` — boards can't overlap
-- Positions persist across sessions
+Frontly uses a **12 × 12 px** square grid cell.
 
-### 2. Workspaces
-- Create unlimited workspaces for different contexts (Work, Personal, Projects)
-- Switch between workspaces via tabs in the toolbar
+| Property | Value |
+|---|---|
+| Cell size | 12 × 12 px |
+| Columns (1920px) | 156 |
+| Row height | 12 px |
+| Link row height | 24 px (2 cells) |
+| Board header | 24 px (2 cells) |
+| Y positions | Snapped to even rows (24px alignment) |
+
+Board heights are always derived from content — you can't manually resize link board heights. Widget heights (note, todo, clock, weather) auto-size from their content.
+
+---
+
+## Board Types
+
+### Link Boards
+The default board type. Each link occupies one 24px row (favicon + title). Boards auto-resize as you add or remove links.
+
+**Display modes** (right-click → Display):
+| Mode | Description |
+|---|---|
+| **List** | Default — favicon + link name per row |
+| **Icons vertical** | Thin strip of stacked favicons, no header |
+| **Icons horizontal** | Row of favicons side by side |
+| **Icons floating** | Row of favicons with no board background |
+
+**Icon sizes**: 12px (default), 24px, 36px, 48px  
+**Sections**: Optional 1px dividers between icons (horizontal/floating modes)
+
+### Note Widget
+A free-form text area. Height auto-expands as you type — pressing Enter grows the board to fit the new line.
+
+### Todo Widget
+Checklist with circular radio buttons. Tasks added by typing + Enter. Shows `✓ completed/total` in the header.
+
+### Weather Widget
+Live weather via Open-Meteo API (free, no API key). Auto-detects location via browser geolocation. Shows temperature, condition, description, and city name.
+
+### Clock Widget
+Displays current time (HH:MM:SS) and full date. Minimal — no board name shown.
+
+---
+
+## Grid Layout Behaviour
+
+- **Drag** boards by the grey pill handle that appears at the top edge on hover
+- **Resize** boards by the right-edge bar that appears on hover (width only for link boards; all widgets use width resize)
+- **Push-down**: when a board grows (link added), boards directly below shift down to maintain the 24px gap
+- **Column overflow**: if a board would extend past the bottom of the viewport, it is automatically relocated to the next free column
+- **Bounded**: `isBounded` is off — boards can extend below the fold (scroll to reach them)
+- **Collision**: `preventCollision` is on — boards cannot overlap during drag
+- **Grid placeholder**: a subtle blue dashed outline shows valid drop positions during drag
+
+---
+
+## Workspaces
+
+- Unlimited workspaces (Work, Personal, Projects, etc.)
+- Switch via tabs in the toolbar
 - Each workspace has its own boards, layout, and wallpaper
-- Right-click workspace tab → Rename, Export as JSON, Delete
-- Transfer boards between workspaces via right-click context menu
+- Right-click a workspace tab → Rename, Export as JSON, Delete
+- Transfer individual boards between workspaces via right-click on the board
 
-### 3. Bookmark Boards
-- Import Chrome bookmarks by folder
-- Auto-splits large folders into multiple boards (semi-structured masonry sizes)
-- Overflow bookmarks auto-create a new workspace
-- Max 7 links per board, max 10 boards per workspace
-- Drag links between boards via favicon
-- Reorder links within a board by dragging favicon up/down
-- Click link title → opens URL
-- Right-click link → Rename, Transfer to workspace board, Delete
+---
 
-### 4. Note Boards
-- Sticky note boards with a text area
-- Auto-saves content to storage
-- Supports any text content
-- Create via Widgets menu or `Alt+N`
+## Wallpapers
 
-### 5. Todo Boards
-- Checklist boards with checkboxes
-- Add tasks by typing + Enter
-- Check/uncheck to mark complete (strikethrough)
-- Delete individual tasks on hover
-- Create via Widgets menu or `Alt+T`
+| Type | Format | Storage |
+|---|---|---|
+| Static image | PNG, JPG | `chrome.storage.local` as data URL |
+| Animated GIF | GIF | `chrome.storage.local` as data URL |
+| Video | MP4, WebM | IndexedDB (`frontly-videos`) as raw Blob |
+| Live wallpaper | CSS animation | No storage — 5 built-in animated backgrounds |
 
-### 6. Weather Widget
-- Live weather from Open-Meteo API (free, no key needed)
-- Auto-detects location via browser geolocation
-- Shows temperature, condition icon, description, city
-- Updates on each new tab load
-- Create via Widgets menu or `Alt+W`
-
-### 7. Clock Widget
-- Displays current time (hours:minutes:seconds)
-- Shows full date (weekday, month, day, year)
-- No board name shown (minimal)
-- Create via Widgets menu or `Alt+C`
-
-### 8. Wallpapers
-- **Static images** (PNG, JPG) — stored as data URL
-- **Animated GIFs** — stored as data URL, animates as background
-- **4K Videos** (MP4, WebM) — stored in IndexedDB as raw Blob, GPU-accelerated playback
-- Each workspace can have its own wallpaper
-- Default fallback: `Frontly.png` in public folder
-- Set via toolbar wallpaper button or `Alt+P`
-
-### 9. Board Colors
-- 7 color themes: Red, Amber, Green, Blue, Purple, Pink, Default
-- Right-click board name → Color picker dots
-- Opacity controlled by Settings slider
-- Text automatically turns white on colored boards
-
-### 10. Layout Lock
-- Lock button (🔒/🔓) in toolbar
-- When locked: no dragging, no resizing, no accidental moves
-- Toggle via button or `Alt+L`
-- Auto-lock timer available in Settings
+**Live wallpaper options**: Aurora, Gradient Wave, Particles, Mesh Gradient, Ocean  
+Set via: toolbar → Live wallpaper button (sun icon)  
+Keyboard: `Alt+P` opens the file picker for static/video wallpapers
 
 ---
 
 ## Toolbar
 
-The toolbar is a retractable drawer activated by the Frontly logo button.
+Activated by clicking the Frontly logo button (top-left by default).
 
-### Toolbar elements (left to right):
-| # | Element             | Function                             |
-|---|---------------------|--------------------------------------|
-| 1 | Frontly Logo        | Toggle toolbar open/close            |
-| 2 | Workspace Tabs      | Switch/create workspaces             |
-| 3 | + Button            | Create bookmark board                |
-| 4 | Widgets (grid icon) | Dropdown: Note, Todo, Weather, Clock |
-| 5 | Search              | Filter boards and links              |
-| 6 | Lock Button         | Toggle layout lock                   |
-| 7 | 3-Dot Menu (⋯)      | Expands to reveal toolbar actions   |
+**Toolbar elements**:
+| Element | Function |
+|---|---|
+| Frontly logo | Toggle toolbar open/close |
+| Workspace tabs | Switch / create workspaces |
+| `+` button | Create new link board |
+| Widgets button | Dropdown: Note, Todo, Weather, Clock |
+| Search | Filter boards and links live |
+| Lock `🔒/🔓` | Toggle layout lock (no drag/resize when locked) |
+| `⋯` menu | Reveals action buttons |
 
-### 3-Dot Menu actions:
-- Quick Save — cycle quick-save board
+**Action buttons in `⋯` menu**:
+- Quick Save — set which board receives Ctrl+Shift+Z saves
 - Bookmarks — import Chrome bookmarks (folder picker)
-- Export — download all data as JSON
-- Import — upload JSON backup
-- Wallpaper — set image/GIF/video background
-- Clear Everything — wipe workspace (with confirmation)
+- Export — download all workspace data as JSON
+- Import — restore from JSON backup
+- Wallpaper (image icon) — set static image or video wallpaper
+- Clear wallpaper (power icon) — remove wallpaper and reset workspace
+- Live wallpaper (sun icon) — pick an animated CSS background
 
 ---
 
 ## Keyboard Shortcuts
 
-| Shortcut       | Action                                  |
-|----------------|-----------------------------------------|
-| `Ctrl+B`       | New bookmark board                      |
-| `Ctrl+M`       | Toggle toolbar                          |
-| `Ctrl+Z`       | Undo                                    |
-| `Ctrl+Y`       | Redo                                    |
-| `Alt+T`        | New todo list                           |
-| `Alt+N`        | New note board                          |
-| `Alt+W`        | New weather widget                      |
-| `Alt+C`        | New clock widget                        |
-| `Alt+L`        | Lock/unlock layout                      |
-| `Alt+S`        | Focus search bar                        |
-| `Alt+E`        | Export JSON                             |
-| `Alt+I`        | Import JSON                             |
-| `Alt+P`        | Set wallpaper                           |
-| `Alt+X`        | Wipe workspace                          |
-| `Ctrl+Shift+Z` | Quick save current tab (Chrome command) |
+| Shortcut | Action |
+|---|---|
+| `Ctrl+B` | New link board |
+| `Ctrl+M` | Toggle toolbar |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` | Redo |
+| `Alt+N` | New note board |
+| `Alt+T` | New todo list |
+| `Alt+W` | New weather widget |
+| `Alt+C` | New clock widget |
+| `Alt+L` | Lock / unlock layout |
+| `Alt+S` | Focus search bar |
+| `Alt+E` | Export workspace JSON |
+| `Alt+I` | Import JSON (opens file picker) |
+| `Alt+P` | Set wallpaper (opens file picker) |
+| `Alt+X` | Clear workspace (with confirmation) |
+| `Ctrl+Shift+Z` | Quick-save current tab to selected board |
 
 ---
 
 ## Context Menus
 
-### Board name (right-click):
-- Add link
-- Rename board
-- Color picker (7 colors)
-- Duplicate board
-- Transfer to [workspace]
-- Delete board
+### Board (right-click anywhere on board):
+- **Add link** *(link boards only, default mode)*
+- **Rename board** *(link boards in default mode only)*
+- **Hide / Show header** *(link boards in default mode only)*
+- **Display** — switch between List / Icons vertical / Icons horizontal / Icons floating; set icon size (12/24/36/48px); toggle sections
+- **Color** — per-board color picker (8 colors + clear glass + default)
+- **Duplicate board**
+- **Transfer to [workspace]** *(if other workspaces exist)*
+- **Delete board**
 
-### Link/bookmark (right-click):
+### Link (right-click a bookmark row):
 - Rename
-- Transfer to workspace / board
-- Delete bookmark
+- Transfer to workspace/board
+- Delete
 
 ### Workspace tab (right-click):
 - Rename workspace
-- Export workspace (JSON download)
+- Export workspace as JSON
 - Delete workspace
-
-### Note textarea (right-click):
-- Same as board name context menu (color, rename, delete)
 
 ---
 
 ## Settings (⚙️ gear icon — bottom right)
 
-### Appearance Tab:
-- **Font Family** — 10 Google Fonts to choose from
-- **Font Size** — 8px to 14px slider
-- **Board Opacity** — 50% to 100% (applies to all boards including colored)
-- **Border Radius** — 4px to 24px
-- **Text Mode** — Auto / Dark / Light (force text color)
-- **Toolbar Position** — Left / Center / Right
+### Appearance Tab
 
-### Behavior Tab:
-- **Auto-close toolbar** — 0-30 seconds (0 = disabled)
-- **Auto-lock layout** — 0-60 seconds (0 = disabled)
-- **Open links in** — New tab / Same tab
-- **Default board width** — 20 to 60 grid units
-- **Default board height** — 4 to 20 grid units
+**Typography**
+- Font Family — 10 Google Fonts
+- Font Size — 8–14px
+- Text Mode — Auto / Dark / Light
 
-### Data Tab:
-- **Storage usage** — shows current KB/MB used
-- **Re-run onboarding** — restart the guided tour
-- **Factory reset** — clear ALL data (with confirmation)
+**Board**
+- Opacity, Border Radius, Blur, Saturation, Grain
+- Color (applies to all link boards at once)
 
-### Info Tab:
-- Version number
+**Toolbar**
+- Position — Left / Center / Right
+- Opacity, Border Radius, Blur, Saturation, Grain, Color
+
+**Widgets** (note, todo, clock, weather — independent of board settings)
+- Opacity, Border Radius, Blur, Saturation, Grain, Color
+
+### Behavior Tab
+
+**Automation**
+- Auto-close toolbar — 0–30 s (0 = off)
+- Auto-lock layout — 0–60 s (0 = off)
+
+**Links**
+- Open links in — New tab / Same tab
+
+**Default Board Size**
+- Width — 108–360 px (9–30 grid units)
+
+**Default Display Mode**
+- Mode — List / V-Icons / H-Icons / Float
+- Icon Size — 12 / 24 / 36 / 48 px
+- Show sections — toggle dividers between icons
+
+### Data Tab
+- Storage used (KB / MB)
+- Re-run onboarding
+- Factory reset (wipes everything)
+
+### Info Tab
+- Version
 - GitHub link
-- Full keyboard shortcuts reference
+- Full keyboard shortcut reference
 
 ---
 
-## Onboarding
+## Quick Save (`Ctrl+Shift+Z`)
 
-First-time users see a guided spotlight tour highlighting:
-1. Welcome introduction
-2. Create boards & notes buttons
-3. 3-dot toolbar menu features
-4. Workspace tabs
-5. Search functionality
-6. Lock button
-7. All keyboard shortcuts
+Saves the current active tab as a link to the designated quick-save board. Configure which board receives saved links by clicking the Quick Save button in the toolbar `⋯` menu.
 
-The tour uses a spotlight cutout effect that highlights each element with a white border. Tooltip auto-flips if near viewport edges.
+Requirements:
+- At least one link board must exist in the active workspace
+- The page must not be a browser internal page (`chrome://`, `about:`, etc.)
+
+A Chrome notification confirms the save, or explains why it failed.
+
+---
+
+## Import / Export
+
+**Export**: Downloads a JSON file containing all workspaces, boards, links, settings, and layout data. Video wallpapers are excluded (stored in IndexedDB separately).
+
+**Import**: Restores from a JSON backup. Also supports importing from the old TabDeck format — if the JSON contains boards but no workspaces, it auto-converts them into a new workspace.
+
+**Bookmark Import**: Imports a Chrome bookmarks folder. Large folders are automatically split into multiple boards (3–7 links each, semi-structured for visual variety). Boards that exceed the workspace limit (10) spill into a new workspace.
+
+---
+
+## Data Migration (TabDeck → Frontly)
+
+If you previously used TabDeck, your data is automatically migrated on first load:
+
+- `tabdeck-workspaces` → `frontly-workspaces`
+- `tabdeck-board-store` → `frontly-board-store`
+- `tabdeck-quick-save-board-id` → `frontly-quick-save-board-id`
+- `tabdeck-settings` → `frontly-settings` (localStorage)
+- `tabdeck-onboarding-done` → `frontly-onboarding-done` (localStorage)
+
+The migration runs once (flagged by `frontly-migrated-from-tabdeck`) and only writes new keys if they don't already exist, so it's safe to run on any device.
 
 ---
 
 ## Technical Architecture
 
-### Tech Stack:
+### Tech Stack
 - **React 19** + TypeScript
 - **Vite** + CRXJS (Chrome Extension plugin)
-- **react-grid-layout v1.4.4** — bento grid system
-- **@dnd-kit** — link drag & drop (sortable + droppable)
-- **Zustand** — state management (workspace store + settings store + UI store)
+- **react-grid-layout v1.4.4** — 12px bento grid
+- **@dnd-kit** — link drag-and-drop within boards
+- **Zustand** — state (workspace store + settings store + UI store)
 - **Lucide React** — icons
-- **Chrome APIs** — storage, bookmarks, tabs, commands
+- **Chrome APIs** — storage, bookmarks, tabs, commands, notifications
 
-### File Structure:
+### Storage
+| Store | Content |
+|---|---|
+| `chrome.storage.local` | Workspaces, boards, links, layouts, image/GIF wallpapers |
+| IndexedDB (`frontly-videos`) | Video wallpaper blobs |
+| `localStorage` | Settings, onboarding state |
+
+### File Structure
 ```
 src/
 ├── newtab/
-│   ├── main.tsx                      — Entry point
-│   └── NewTab.tsx                    — Main component (900+ lines)
+│   ├── main.tsx                      Entry point + settings pre-apply
+│   └── NewTab.tsx                    Main component (grid, toolbar, drag)
+├── background.ts                     Service worker (quick-save, migration)
 ├── components/
-│   ├── Board/Board.tsx               — Board panel (links/note/todo/weather/clock)
-│   ├── Card/LinkCard.tsx             — Individual bookmark link
+│   ├── Board/Board.tsx               All board types + icon modes
+│   ├── Card/LinkCard.tsx             Sortable bookmark link row
 │   ├── UI/
-│   │   ├── Toolbar.tsx               — Retractable 3-dot menu
-│   │   ├── WorkspaceTabs.tsx
-│   │   ├── Toast.tsx
-│   │   ├── Onboarding.tsx
-│   │   └── Settings.tsx
+│   │   ├── Toolbar.tsx               Retractable action toolbar
+│   │   ├── WorkspaceTabs.tsx         Workspace switcher
+│   │   ├── Settings.tsx              Settings panel + sliders
+│   │   ├── Toast.tsx                 Notification toasts
+│   │   └── Onboarding.tsx            First-run guided tour
 │   ├── Wallpaper/
-│   │   └── LiveWallpaperPicker.tsx
+│   │   └── LiveWallpaperPicker.tsx   Animated wallpaper selector
 │   └── Widgets/
 │       ├── ClockWidget.tsx
 │       ├── TodoBoard.tsx
 │       └── WeatherWidget.tsx
 ├── store/
-│   ├── useWorkspaceStore.ts          — All workspace/board/link CRUD
-│   ├── useSettingsStore.ts           — App settings (font, opacity, etc.)
-│   └── useUiStore.ts                 — Toast notifications
+│   ├── useWorkspaceStore.ts          Workspace / board / link CRUD
+│   ├── useSettingsStore.ts           App-wide settings
+│   └── useUiStore.ts                 Toast notifications
 ├── lib/
-│   ├── bookmarkImport.ts             — Import + auto-split logic
-│   ├── videoStorage.ts               — IndexedDB for video wallpapers
-│   ├── undoManager.ts                — Undo/redo stack
-│   ├── workspaceTypes.ts             — TypeScript interfaces
-│   ├── types.ts                      — Link/Board types
-│   └── favicon.ts                    — Favicon URL helper
-├── styles/
-│   └── global.css                    — All styles (1300+ lines)
-└── background.ts                     — Service worker (quick save handler)
+│   ├── workspaceTypes.ts             TypeScript interfaces
+│   ├── bookmarkImport.ts             Import + auto-split logic
+│   ├── videoStorage.ts               IndexedDB for video wallpapers
+│   ├── undoManager.ts                Undo/redo stack
+│   ├── useGridDimensions.ts          Reactive grid size (12px cells)
+│   └── favicon.ts                    Google favicon URL helper
+└── styles/
+    ├── global.css                    All component styles + live wallpaper animations
+    └── tokens.css                    Design tokens (spacing, radius, shadow, etc.)
 ```
 
-### Storage:
-- **chrome.storage.local** (with `unlimitedStorage` permission) — workspace data, board layouts, image/GIF wallpapers
-- **IndexedDB** (`Frontly-videos` database) — video wallpaper blobs
-- **localStorage** — settings, onboarding state
-
-### Grid System:
-- 172 columns × 85 rows
-- 6px cell size, 4px margins
-- Zero leftover pixels: 172×6 + 171×4 = 1716px width, 85×6 + 84×4 = 846px height
-
----
-
-## Permissions Used:
-- `storage` — save workspace data
-- `unlimitedStorage` — store large GIF/video wallpapers
-- `activeTab` — read current tab for quick save
-- `tabs` — access tab info
+### Permissions
+- `storage` + `unlimitedStorage` — workspace data and wallpapers
+- `activeTab` + `tabs` — quick-save current tab
 - `bookmarks` — import Chrome bookmarks
-- `notifications` — toast notifications
+- `notifications` — quick-save confirmation
 
 ---
 
 ## Version History
 
-| Version | Highlights                                                              |
-|---------|-------------------------------------------------------------------------|
-| v1.0.0  | Initial commit — basic boards, toolbar                                  |
-| v2.0.0  | Glass UI, bookmark import, workspace management                         |
-| v3.0.0  | Bento grid, video wallpapers, transfer, lock, context menus             |
-| v4.0.0  | Notes, todo, weather, clock, onboarding, undo/redo, duplicate, cleanup  |
-| v4.1.0  | Full settings panel, Alt shortcuts, clock widget, colored board opacity |
+| Version | Highlights |
+|---|---|
+| v1.0.0 | Initial release — basic boards, toolbar |
+| v1.1.0 | Frontly rebrand; 12px grid; icon display modes; live wallpapers; widget settings; note/todo redesign; context menu clamping; full type-safety cleanup |
+| v1.2.0 | Text color settings per section; add-link form inherits board style; icon strip fixes; localStorage migration; background.ts migration; live wallpaper wiring; documentation rewrite |
 
 ---
 

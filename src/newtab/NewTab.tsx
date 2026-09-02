@@ -23,15 +23,192 @@ import { storeVideoBlob, deleteVideoBlob, getVideoBlob } from '../lib/videoStora
 import { pushState, undo, redo } from '../lib/undoManager';
 import { useUiStore } from '../store/useUiStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
-import { useGridDimensions } from '../lib/useGridDimensions';
+import { useGridDimensions, GRID_STEP, ROWS_PER_LINK } from '../lib/useGridDimensions';
 import '../styles/global.css';
 
 // Old grid system constants for migration
 const OLD_COLS = 172;
 
-const WORKSPACE_STORE_KEY = 'tabdeck-workspaces';
-const LEGACY_BOARD_STORE_KEY = 'tabdeck-board-store';
-const QUICK_SAVE_BOARD_KEY = 'tabdeck-quick-save-board-id';
+// ─── Grid geometry (12px cells) ───
+// A link row and the board header are each 24px = ROWS_PER_LINK cells.
+// Height is always derived from content, never stored:
+//   h = ROWS_PER_LINK * ((header ? 1 : 0) + linkCount)
+// `y` is snapped to even rows so link rows stay aligned between neighbouring
+// boards, while `x`/`w` use the full 12px resolution for fine width control.
+const DEFAULT_W = 28; // 28 × 12px = 336px
+const MIN_W = 8; //  8 × 12px = 96px
+
+const snapEven = (n: number) => Math.max(n - (n % 2), 0);
+
+const getContentH = (linkCount: number, hideHeader?: boolean) => {
+  const rows = (hideHeader ? 0 : 1) + Math.max(linkCount, 1);
+  return rows * ROWS_PER_LINK;
+};
+
+/** Gap between vertically stacked boards (2 grid rows = 24px). */
+const VERTICAL_GAP = ROWS_PER_LINK; // 2 rows = 24px
+
+/**
+ * Two items share a column if their x ranges overlap.
+ */
+function xOverlaps(a: { x: number; w: number }, b: { x: number; w: number }) {
+  return a.x < b.x + b.w && b.x < a.x + a.w;
+}
+
+/**
+ * Push-down & overflow compaction.
+ *
+ * After computing each board's ideal layout position, this function:
+ * 1. For every board that has another board directly above it (overlapping x),
+ *    ensures the vertical gap between them is preserved when the upper board
+ *    grows (boards below shift down).
+ * 2. If a board's bottom exceeds `maxRows`, it is relocated to the first free
+ *    column that can fit it.
+ *
+ * This runs once per gridLayout computation (useMemo), so it has no effect on
+ * manual drag — RGL's own collision system handles that via preventCollision.
+ */
+function pushDownAndOverflow(
+  items: Array<{ i: string; x: number; y: number; w: number; h: number; minW: number }>,
+  cols: number,
+  maxRows: number,
+) {
+  // Work on a mutable copy
+  const layout = items.map((item) => ({ ...item }));
+
+  // Phase 1: Push down overlapping items to maintain gaps
+  // Sort by y so we process top-to-bottom
+  layout.sort((a, b) => a.y - b.y || a.x - b.x);
+
+  for (let i = 0; i < layout.length; i++) {
+    const upper = layout[i];
+    for (let j = i + 1; j < layout.length; j++) {
+      const lower = layout[j];
+      if (!xOverlaps(upper, lower)) continue;
+
+      const requiredY = snapEven(upper.y + upper.h + VERTICAL_GAP);
+      if (lower.y < requiredY) {
+        lower.y = requiredY;
+      }
+    }
+  }
+
+  // Phase 2: If any board's bottom exceeds maxRows, move it to the next free column
+  // Ensure at least 1 grid cell (12px) horizontal gap from neighbouring boards.
+  const H_GAP = 1; // 1 grid cell = 12px horizontal spacing
+
+  for (let i = 0; i < layout.length; i++) {
+    const item = layout[i];
+    if (item.y + item.h <= maxRows) continue;
+
+    // Find a column where this board fits without overlapping others
+    let placed = false;
+    for (let tryX = 0; tryX + item.w <= cols; tryX += 2) {
+      // Check horizontal gap: tryX range must not be within H_GAP of any other board
+      let freeY = 0;
+      for (const other of layout) {
+        if (other.i === item.i) continue;
+        // Expanded overlap check: include H_GAP on each side
+        const otherLeft = other.x - H_GAP;
+        const otherRight = other.x + other.w + H_GAP;
+        const itemRight = tryX + item.w;
+        if (tryX < otherRight && itemRight > otherLeft) {
+          // Vertically overlapping — count this board's bottom as occupied
+          const bottom = other.y + other.h + VERTICAL_GAP;
+          if (bottom > freeY) freeY = bottom;
+        }
+      }
+      freeY = snapEven(freeY);
+      if (freeY + item.h <= maxRows) {
+        item.x = tryX;
+        item.y = freeY;
+        placed = true;
+        break;
+      }
+    }
+    // If nothing fits (tiny viewport), just place it at column 0 at the bottom
+    if (!placed) {
+      item.x = 0;
+      // item.y stays — it'll overflow but we can't shrink a board
+    }
+  }
+
+  return layout;
+}
+
+const WORKSPACE_STORE_KEY = 'frontly-workspaces';
+const LEGACY_BOARD_STORE_KEY = 'frontly-board-store';
+const QUICK_SAVE_BOARD_KEY = 'frontly-quick-save-board-id';
+
+// ─── TabDeck → Frontly one-time migration ───────────────────────────────────
+// Old keys used the 'tabdeck-' prefix. Read them once, write under 'frontly-',
+// then delete the old keys so the migration never runs again.
+const MIGRATION_FLAG_KEY = 'frontly-migrated-from-tabdeck';
+async function migrateTabdeckKeys() {
+  try {
+    const flagResult = await chrome.storage.local.get(MIGRATION_FLAG_KEY);
+    if (flagResult[MIGRATION_FLAG_KEY]) return; // already done
+
+    const OLD_KEYS = [
+      'tabdeck-workspaces',
+      'tabdeck-board-store',
+      'tabdeck-quick-save-board-id',
+      'tabdeck-last-quick-save-debug',
+    ];
+    const oldData = await chrome.storage.local.get(OLD_KEYS);
+
+    const toWrite: Record<string, unknown> = { [MIGRATION_FLAG_KEY]: true };
+
+    if (oldData['tabdeck-workspaces'] !== undefined) {
+      // Only migrate if no frontly-workspaces exists yet (first install after rename)
+      const existing = await chrome.storage.local.get(WORKSPACE_STORE_KEY);
+      if (!existing[WORKSPACE_STORE_KEY]) {
+        toWrite[WORKSPACE_STORE_KEY] = oldData['tabdeck-workspaces'];
+      }
+    }
+    if (oldData['tabdeck-board-store'] !== undefined) {
+      const existing = await chrome.storage.local.get(LEGACY_BOARD_STORE_KEY);
+      if (!existing[LEGACY_BOARD_STORE_KEY]) {
+        toWrite[LEGACY_BOARD_STORE_KEY] = oldData['tabdeck-board-store'];
+      }
+    }
+    if (oldData['tabdeck-quick-save-board-id'] !== undefined) {
+      const existing = await chrome.storage.local.get(QUICK_SAVE_BOARD_KEY);
+      if (!existing[QUICK_SAVE_BOARD_KEY]) {
+        toWrite[QUICK_SAVE_BOARD_KEY] = oldData['tabdeck-quick-save-board-id'];
+      }
+    }
+
+    await chrome.storage.local.set(toWrite);
+    await chrome.storage.local.remove(OLD_KEYS);
+  } catch {
+    // Non-fatal — the app still loads with fresh state if this fails
+  }
+}
+
+// Migrate localStorage settings key (tabdeck-settings → frontly-settings)
+function migrateLocalStorageSettings() {
+  try {
+    const FRONTLY_KEY = 'frontly-settings';
+    const TABDECK_KEY = 'tabdeck-settings';
+    if (localStorage.getItem(FRONTLY_KEY)) return; // already has frontly key
+    const old = localStorage.getItem(TABDECK_KEY);
+    if (old) {
+      localStorage.setItem(FRONTLY_KEY, old);
+      localStorage.removeItem(TABDECK_KEY);
+    }
+    // Also migrate onboarding flag
+    if (!localStorage.getItem('frontly-onboarding-done') && localStorage.getItem('tabdeck-onboarding-done')) {
+      localStorage.setItem('frontly-onboarding-done', '1');
+      localStorage.removeItem('tabdeck-onboarding-done');
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+// Run migrations synchronously (localStorage) and async (chromeStorage) at module level
+migrateLocalStorageSettings();
 
 type ImportedSavedLink = {
   id?: string;
@@ -129,6 +306,7 @@ export function NewTab() {
     moveLink,
     setWorkspaceWallpaper,
     setVideoWallpaper,
+    setWorkspaceLiveWallpaper,
     getActiveWorkspace,
   } = useWorkspaceStore();
 
@@ -138,12 +316,15 @@ export function NewTab() {
   const [quickSaveBoardId, setQuickSaveBoardId] = useState('');
   const [layoutLocked, setLayoutLocked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
-    return !localStorage.getItem('tabdeck-onboarding-done');
+    return !localStorage.getItem('frontly-onboarding-done');
   });
   const [toolbarOpen, setToolbarOpen] = useState(true);
   const [widgetsOpen, setWidgetsOpen] = useState(false);
   const appSettings = useSettingsStore();
   const grid = useGridDimensions();
+
+  // Run chrome.storage migration once on mount (localStorage migration is synchronous at module level)
+  useEffect(() => { migrateTabdeckKeys(); }, []);
 
   // Apply all CSS settings on mount and whenever they change
   useEffect(() => {
@@ -151,7 +332,8 @@ export function NewTab() {
     applyGlassCSS(
       appSettings.glassBlur, appSettings.glassSaturation, appSettings.glassTint,
       appSettings.toolbarBlur, appSettings.toolbarSaturation, appSettings.toolbarTint,
-      appSettings.toolbarOpacity, appSettings.toolbarRadius, appSettings.toolbarGrain
+      appSettings.toolbarOpacity, appSettings.toolbarRadius, appSettings.toolbarGrain,
+      appSettings.toolbarColor, appSettings.toolbarTextColor, appSettings.miscTextColor
     );
   }, [
     appSettings.fontFamily,
@@ -165,6 +347,9 @@ export function NewTab() {
     appSettings.toolbarOpacity,
     appSettings.toolbarRadius,
     appSettings.toolbarGrain,
+    appSettings.toolbarColor,
+    appSettings.toolbarTextColor,
+    appSettings.miscTextColor,
   ]);
 
   // Auto-close toolbar timer
@@ -386,6 +571,8 @@ export function NewTab() {
       })
       .filter(
         (board) =>
+          // Widgets (no links) always show; link boards show if name or links match
+          board.type === 'note' || board.type === 'todo' || board.type === 'clock' || board.type === 'weather' ||
           board.name.toLowerCase().includes(query) || board.links.length > 0
       );
   }, [activeWorkspace, search]);
@@ -437,55 +624,113 @@ export function NewTab() {
     moveLink(activeWorkspace.id, activeId, overId, fromBoardId, toBoardId);
   };
 
-  // Pure 24px grid system — each row = 24px, each link = 1 row, board name = 1 row
-  // h = 1 (name) + linkCount, or just linkCount if header hidden
-
-  // Default board width in grid units
-  const DEFAULT_W = 14; // 14 × 24px = 336px
-
-  const getContentH = (linkCount: number, hideHeader?: boolean) => {
-    const headerRows = hideHeader ? 0 : 1;
-    return Math.max(headerRows + linkCount, 3);
-  };
-
-  const gridLayout = useMemo(() => {
+  // Compute grid layout on every render — ensures height always matches content
+  const gridLayout = (() => {
     if (!activeWorkspace) return [];
 
-    return visibleBoards.map((board, index) => {
-      // Always calculate height from actual content
-      const contentH = getContentH(board.links.length, board.hideHeader);
+    // Map from board.id → override width for icon modes (avoids as-any mutation)
+    const iconWidthOverride = new Map<string, number>();
 
-      if (board.layout) {
-        // Migrate old 172-col layouts to new column count
-        const needsMigration = board.layout.w > grid.cols || board.layout.x + board.layout.w > grid.cols + 5;
-        const x = needsMigration ? Math.round(board.layout.x * grid.cols / OLD_COLS) : board.layout.x;
-        const w = needsMigration ? Math.round(board.layout.w * grid.cols / OLD_COLS) : board.layout.w;
+    const rawLayout = visibleBoards.map((board, index) => {
+      // Compute height from actual content for all board types
+      let contentH: number;
+      if (board.type === 'clock') {
+        // Clock: time + date = ~3 rows (72px)
+        contentH = ROWS_PER_LINK * 3;
+      } else if (board.type === 'weather') {
+        // Weather: icon + temp + desc = ~3 rows (72px)
+        contentH = ROWS_PER_LINK * 3;
+      } else if (board.type === 'note') {
+        // Note: header + text content
+        // Text: 10px font, 1.5 line-height = 15px/line, plus 12px padding
+        const lineCount = Math.max((board.noteContent || '').split('\n').length, 2);
+        const headerRows = board.hideHeader ? 0 : ROWS_PER_LINK;
+        const textPx = lineCount * 15 + 12; // line-height * lines + padding
+        const textRows = Math.ceil(textPx / 12);
+        contentH = headerRows + textRows;
+      } else if (board.type === 'todo') {
+        // Todo: header + todo items + input row
+        const todoCount = (board.todos || []).length;
+        const headerRows = board.hideHeader ? 0 : ROWS_PER_LINK;
+        contentH = headerRows + Math.max(todoCount, 1) * ROWS_PER_LINK + ROWS_PER_LINK;
+      } else {
+        // Link boards — check display mode
+        const mode = board.displayMode || appSettings.defaultDisplayMode;
+        const iconSz = board.iconSize || appSettings.defaultIconSize;
+        const linkCount = Math.max(board.links.length, 1);
 
-        return {
-          i: board.id,
-          x: Math.min(x, grid.cols - w),
-          y: board.layout.y,
-          w: Math.max(w, 4),
-          h: contentH,
-          minW: 4,
-        };
+        if (mode === 'icons-vertical') {
+          // Vertical strip: width = iconSize + 8px padding, height = icons stacked
+          const stripW = Math.ceil((iconSz + 8) / 12); // grid cols for the strip width
+          const stripH = Math.ceil((linkCount * (iconSz + 4) + 4) / 12); // icons + gaps + padding
+          contentH = stripH;
+          // Override width for this board — we'll store it in a local var
+          // and apply below
+          iconWidthOverride.set(board.id, Math.max(stripW, 2));
+        } else if (mode === 'icons-horizontal' || mode === 'icons-floating') {
+          // Horizontal strip: height = iconSize + padding, width = icons in a row (no header in icon modes)
+          const sections = board.showSections ?? appSettings.defaultShowSections;
+          const iconSlotW = iconSz + (sections ? 5 : 4); // icon + gap (+ 1px divider)
+          const totalPx = (linkCount * iconSlotW) + 8; // padding
+          const stripH = Math.ceil((iconSz + 8) / 12); // height in grid rows
+          contentH = Math.max(stripH, 2);
+          iconWidthOverride.set(board.id, Math.max(Math.ceil(totalPx / 12), MIN_W));
+        } else {
+          contentH = getContentH(board.links.length, board.hideHeader);
+        }
       }
 
-      // Default: spread boards in rows
-      const boardsPerRow = Math.floor(grid.cols / (DEFAULT_W + 1));
-      const col = index % Math.max(boardsPerRow, 1);
-      const row = Math.floor(index / Math.max(boardsPerRow, 1));
+      if (board.layout) {
+        // Layouts written under a coarser grid (24px, or the legacy 172-col
+        // system) are rescaled to 12px cells on read.
+        const savedStep = board.layout.gridStep ?? 24;
+        const scale = savedStep / GRID_STEP;
 
-      return {
-        i: board.id,
-        x: col * (DEFAULT_W + 1),
-        y: row * (contentH + 1),
-        w: DEFAULT_W,
-        h: contentH,
-        minW: 4,
-      };
+        let x = Math.round(board.layout.x * scale);
+        let w = Math.round(board.layout.w * scale);
+        let y = Math.round(board.layout.y * scale);
+        const h = contentH;
+
+        // Legacy 172-col layouts can still overflow after scaling — fit them.
+        if (w > grid.cols) {
+          x = Math.round((x * grid.cols) / OLD_COLS);
+          w = Math.round((w * grid.cols) / OLD_COLS);
+        }
+
+        w = Math.min(Math.max(w, MIN_W), grid.cols);
+        x = Math.max(Math.min(x, grid.cols - w), 0);
+
+        // Icon modes override width
+        const iconW = iconWidthOverride.get(board.id);
+        if (iconW) {
+          w = Math.min(iconW, grid.cols);
+          x = Math.max(Math.min(x, grid.cols - w), 0);
+        }
+
+        // Only snap y — never clamp it to the viewport, or shrinking the window
+        // would drag boards upward and persist that as their new position.
+        y = snapEven(y);
+
+        return { i: board.id, x, y, w, h, minW: iconW || MIN_W };
+      }
+
+      // No saved layout: spread boards left-to-right, wrapping into rows
+      const h = contentH;
+      const iconW = iconWidthOverride.get(board.id);
+      const finalW = iconW || DEFAULT_W;
+      const perRow = Math.max(Math.floor(grid.cols / (finalW + 1)), 1);
+      const col = index % perRow;
+      const row = Math.floor(index / perRow);
+
+      const x = Math.max(Math.min(col * (finalW + 1), grid.cols - finalW), 0);
+      const y = snapEven(row * (h + ROWS_PER_LINK));
+
+      return { i: board.id, x, y, w: finalW, h, minW: iconW || MIN_W };
     });
-  }, [activeWorkspace, visibleBoards, grid.cols]);
+
+    // Push boards down to maintain gaps, and overflow to next column if needed
+    return pushDownAndOverflow(rawLayout, grid.cols, grid.maxRows);
+  })();
 
   const handleGridLayoutChange = (layout: RGL.Layout[]) => {
     if (!activeWorkspace) return;
@@ -493,7 +738,7 @@ export function NewTab() {
     const layouts = layout.map((item) => ({
       id: item.i,
       x: item.x,
-      y: item.y,
+      y: snapEven(item.y),
       w: item.w,
       h: item.h,
     }));
@@ -530,7 +775,7 @@ const handleImportBookmarks = async (folderId?: string) => {
 
     // Import boards into current workspace
     for (const board of boards) {
-      importBoard(activeWorkspace.id, board as any);
+      importBoard(activeWorkspace.id, board);
     }
 
     // If overflow, create a new workspace for them
@@ -546,7 +791,7 @@ const handleImportBookmarks = async (folderId?: string) => {
         );
         if (overflowWorkspace) {
           for (const board of overflow) {
-            state.importBoard(overflowWorkspace.id, board as any);
+            state.importBoard(overflowWorkspace.id, board);
           }
         }
       }, 50);
@@ -576,7 +821,7 @@ const handleImportBookmarks = async (folderId?: string) => {
 
       const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = `tabdeck-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `frontly-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -760,7 +1005,8 @@ const handleImportBookmarks = async (folderId?: string) => {
   if (!activeWorkspace) return null;
 
   const hasVideoWallpaper = !!videoObjectUrl;
-  const wallpaperUrl = hasVideoWallpaper ? undefined : (activeWorkspace.wallpaper || '/tabdeck.png');
+  const hasLiveWallpaper = !!activeWorkspace.liveWallpaper && !hasVideoWallpaper;
+  const wallpaperUrl = (hasVideoWallpaper || hasLiveWallpaper) ? undefined : (activeWorkspace.wallpaper || '/frontly.png');
 
   return (
     <div
@@ -785,12 +1031,15 @@ const handleImportBookmarks = async (folderId?: string) => {
           playsInline
         />
       )}
+      {hasLiveWallpaper && (
+        <div className={`td-live-wallpaper td-live-wallpaper--${activeWorkspace.liveWallpaper}`} />
+      )}
       <Toast />
 
       {showOnboarding && (
         <Onboarding
           onComplete={() => {
-            localStorage.setItem('tabdeck-onboarding-done', '1');
+            localStorage.setItem('frontly-onboarding-done', '1');
             setShowOnboarding(false);
           }}
         />
@@ -805,7 +1054,7 @@ const handleImportBookmarks = async (folderId?: string) => {
           title="Toggle toolbar"
           aria-label="Toggle toolbar"
         >
-          <img src="/icons/icon128.png" alt="TabDeck" />
+          <img src="/icons/icon128.png" alt="Frontly" />
         </button>
 
         {/* Toolbar row — slides in/out */}
@@ -953,6 +1202,8 @@ const handleImportBookmarks = async (folderId?: string) => {
               onImportJson={handleImportBackup}
               onWallpaper={handleWallpaper}
               onClearWallpaper={handleClearWallpaper}
+              currentLiveWallpaper={activeWorkspace.liveWallpaper}
+              onLiveWallpaper={(type) => setWorkspaceLiveWallpaper(activeWorkspace.id, type)}
             />
           </div>
         </div>
@@ -978,17 +1229,17 @@ const handleImportBookmarks = async (folderId?: string) => {
             className="td-board-grid"
             layout={gridLayout}
             cols={grid.cols}
-            rowHeight={24}
+            rowHeight={GRID_STEP}
             width={grid.width}
             margin={[0, 0]}
             containerPadding={[0, 0]}
             isDraggable={!layoutLocked}
             isResizable={!layoutLocked}
-            isBounded={true}
+            isBounded={false}
             compactType={null}
             preventCollision={true}
-            autoSize={false}
-            style={{ height: grid.height, width: grid.width }}
+            autoSize={true}
+            style={{ minHeight: grid.height, width: grid.width }}
             draggableHandle=".td-board-drag-bar"
             onDragStop={handleGridLayoutChange}
             onResizeStop={handleGridLayoutChange}
@@ -1009,7 +1260,7 @@ const handleImportBookmarks = async (folderId?: string) => {
       )}
 
       <SettingsButton onResetOnboarding={() => {
-        localStorage.removeItem('tabdeck-onboarding-done');
+        localStorage.removeItem('frontly-onboarding-done');
         setShowOnboarding(true);
       }} />
     </div>

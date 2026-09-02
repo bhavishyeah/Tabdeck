@@ -108,7 +108,7 @@ export function WorkspaceTabs({
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tabdeck-workspace-${ws.name.replace(/\s+/g, '-').toLowerCase()}.json`;
+    a.download = `frontly-workspace-${ws.name.replace(/\s+/g, '-').toLowerCase()}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();

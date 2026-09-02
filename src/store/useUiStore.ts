@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type ToastTone = 'success' | 'error' | 'info';
+type ToastTone = 'success' | 'error' | 'info' | 'warning';
 
 interface UiStore {
   toastMessage: string;

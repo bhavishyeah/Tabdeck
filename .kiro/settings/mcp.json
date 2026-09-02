@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "agentrouter-bridge": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/ecosystem-openai-gpt-mcp-server"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "sk-wHoHzo2V2Z7QVyTLa1Klgh5P0qcSKJLfLKyUw5o4YfLGWvPk",
+        "OPENAI_BASE_URL": "https://agentrouter.org"
+      }
+    }
+  }
+}
+

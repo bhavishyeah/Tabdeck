@@ -13,10 +13,25 @@
   --td-toolbar-opacity: 0.4;
   --td-toolbar-radius: 50px;
   --td-toolbar-grain: 0;
+  --td-toolbar-bg: rgba(255, 255, 255, 0.4);
+  --td-toolbar-color: ;
+  --td-toolbar-text: ;
+  --td-misc-text: #222222;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Disable text selection globally — allow on inputs and textareas */
+*:not(input):not(textarea):not([contenteditable="true"]) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 html,
 body,
@@ -98,6 +113,7 @@ button {
 }
 
 .td-top-actions {
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -112,7 +128,7 @@ button {
   gap: 6px;
   padding: 6px;
   border-radius: var(--td-toolbar-radius);
-  background: rgba(255, 255, 255, var(--td-toolbar-opacity));
+  background: var(--td-toolbar-bg);
   backdrop-filter: var(--td-toolbar-backdrop);
   -webkit-backdrop-filter: var(--td-toolbar-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -165,18 +181,9 @@ button {
 }
 
 
-.td-top-actions {
-  justify-self: end;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-
 .td-search-bar,
 .td-top-actions,
-.td-toolbar,
-.td-clock-chip {
+.td-toolbar {
   pointer-events: auto;
 }
 
@@ -189,14 +196,20 @@ button {
   gap: 10px;
   padding: 0 18px;
   border-radius: var(--td-toolbar-radius);
-  background: rgba(255, 255, 255, var(--td-toolbar-opacity));
+  background: var(--td-toolbar-bg);
   backdrop-filter: var(--td-toolbar-backdrop);
   -webkit-backdrop-filter: var(--td-toolbar-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
     inset 0 -1px 0 rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--td-toolbar-text, rgba(255, 255, 255, 0.92));
+}
+
+/* Toolbar tray and trigger also inherit toolbar text color */
+.td-toolbar-tray,
+.td-toolbar-trigger {
+  color: var(--td-toolbar-text, inherit);
 }
 
 .td-search-input {
@@ -214,25 +227,6 @@ button {
 }
 
 
-.td-clock-chip {
-  min-width: 92px;
-  height: 52px;
-  padding: 0 18px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--td-toolbar-radius);
-  background: rgba(255, 255, 255, var(--td-toolbar-opacity));
-  backdrop-filter: var(--td-toolbar-backdrop);
-  -webkit-backdrop-filter: var(--td-toolbar-backdrop);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.1);
-  color: var(--td-text);
-  font-weight: 400;
-  white-space: nowrap;
-}
-
 .td-toolbar {
   display: flex;
   align-items: center;
@@ -247,7 +241,7 @@ button {
   border-radius: var(--td-toolbar-radius);
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, var(--td-toolbar-opacity));
+  background: var(--td-toolbar-bg);
   backdrop-filter: var(--td-toolbar-backdrop);
   -webkit-backdrop-filter: var(--td-toolbar-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -298,7 +292,7 @@ button {
   opacity: 0;
   overflow: hidden;
   border-radius: var(--td-toolbar-radius);
-  background: rgba(255, 255, 255, var(--td-toolbar-opacity));
+  background: var(--td-toolbar-bg);
   backdrop-filter: var(--td-toolbar-backdrop);
   -webkit-backdrop-filter: var(--td-toolbar-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -359,12 +353,6 @@ button {
   transform: scale(0.94);
 }
 
-.td-link-icon:hover,
-.td-board-close:hover,
-.td-add-row:hover {
-  opacity: 0.78;
-}
-
 .td-board-grid {
   position: relative;
   z-index: 1;
@@ -383,7 +371,7 @@ button {
   border-radius: var(--td-toolbar-radius);
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, var(--td-toolbar-opacity));
+  background: var(--td-toolbar-bg);
   backdrop-filter: var(--td-toolbar-backdrop);
   -webkit-backdrop-filter: var(--td-toolbar-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -469,31 +457,6 @@ button {
   margin: 4px 8px;
   background: rgba(0, 0, 0, 0.08);
 }
-.td-board-top-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.td-board-icon {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  color: #111;
-  cursor: pointer;
-}
-
-.td-board-close {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  color: var(--td-text);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
 .td-board-empty {
   min-height: 40px;
   display: grid;
@@ -599,29 +562,15 @@ button {
   opacity: 0.8;
 }
 
-.td-board-bottom {
-  margin-top: 0;
-}
-
-
 .td-floating-add-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  width: 100%;
   padding: 10px;
   border-radius: 20px;
-  background: rgba(250, 248, 244, 0.96);
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.14);
-  z-index: 20;
+  z-index: 200;
 }
 
 .td-board-panel.is-form-open {
   z-index: 15;
-}
-
-.td-board-icon.is-active {
-  opacity: 0.6;
 }
 
 .td-add-form {
@@ -636,37 +585,43 @@ button {
   padding: 0 12px;
   border: none;
   outline: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--td-text);
+  border-radius: 10px;
+  /* Semi-transparent so the board color bleeds through */
+  background: rgba(255, 255, 255, 0.18);
+  color: inherit;
   font-size: 12px;
+  font-family: var(--td-font);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.td-add-input:focus {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
+  outline: none;
+}
+
+.td-add-input::placeholder {
+  color: inherit;
+  opacity: 0.45;
 }
 
 .td-add-save {
   width: 100%;
   height: 34px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.88);
-  color: #111;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
   cursor: pointer;
   font-weight: 600;
   font-size: 12px;
+  font-family: var(--td-font);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: background 0.12s ease;
 }
 
-.td-add-input::placeholder {
-  color: rgba(34, 34, 34, 0.46);
-}
-
-.td-add-row {
-  width: 100%;
-  height: 42px;
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.52);
-  color: var(--td-text);
-  cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+.td-add-save:hover {
+  background: rgba(255, 255, 255, 0.32);
 }
 
 .td-toast {
@@ -788,8 +743,7 @@ button {
     flex-basis: 46px;
   }
 
-  .td-search-bar,
-  .td-clock-chip {
+  .td-search-bar {
     height: 46px;
   }
 }
@@ -798,13 +752,8 @@ button {
   height: 50px;
 }
 
-.td-clock-chip,
 .td-create-board-btn {
   height: 50px;
-}
-
-.td-clock-chip {
-  min-width: 96px;
 }
 
 .td-board-panel {
@@ -953,11 +902,6 @@ button {
 
 
 
-.td-board-panel.is-dragging {
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  transform: scale(1.02);
-}
-
 
 /* Live wallpaper picker */
 .td-lwp-wrapper {
@@ -1062,19 +1006,15 @@ button {
 }
 
 .react-grid-item.react-grid-placeholder {
-  display: none !important;
+  background: rgba(99, 102, 241, 0.08) !important;
+  border: 1px dashed rgba(99, 102, 241, 0.3) !important;
+  border-radius: 8px !important;
+  opacity: 1 !important;
 }
 
-.react-grid-item > div {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
-
-.react-grid-item > div > .td-board-panel {
-  height: 100% !important;
-  max-height: 100% !important;
+.react-grid-item > .td-board-panel {
   width: 100% !important;
+  height: 100% !important;
   box-sizing: border-box !important;
   margin: 0 !important;
   overflow: hidden !important;
@@ -1082,7 +1022,7 @@ button {
   flex-direction: column;
 }
 
-.react-grid-item > div > .td-board-panel::-webkit-scrollbar {
+.react-grid-item > .td-board-panel::-webkit-scrollbar {
   display: none;
 }
 
@@ -1121,17 +1061,27 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
 }
+
+/* South and Southeast resize handles removed — height is content-derived */
 
 .f-resize-bar::after {
   content: '';
   width: 3px;
-  height: 24px;
+  height: min(24px, 40%);
+  max-height: 24px;
+  min-height: 8px;
   border-radius: 2px;
   background: currentColor;
   opacity: 0;
   cursor: ew-resize;
   transition: opacity var(--f-duration-normal) ease;
+}
+
+/* Show resize bar when hovering anywhere on the grid item (board/widget) */
+.react-grid-item:hover > .f-resize-bar::after {
+  opacity: 0.25;
 }
 
 .f-resize-bar:hover::after {
@@ -1155,8 +1105,32 @@ button {
   padding-bottom: 24px;
 }
 
+/* Visible drag handle — 50% protruding from top edge, shown on board hover */
+.td-board-drag-bar::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 3px;
+  border-radius: 2px;
+  background: #6b7280;
+  opacity: 0;
+  transition: opacity var(--f-duration-normal) ease;
+  pointer-events: none;
+}
+
+.td-board-panel:hover .td-board-drag-bar::before {
+  opacity: 0.7;
+}
+
 .td-board-drag-bar:active {
   cursor: grabbing;
+}
+
+.td-board-drag-bar:active::before {
+  opacity: 1;
 }
 
 /* Link context menu */
@@ -1164,6 +1138,8 @@ button {
   position: fixed;
   z-index: 100;
   min-width: 170px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: var(--f-space-1);
   border-radius: var(--f-radius-md);
   background: rgba(255, 255, 255, 0.92);
@@ -1172,6 +1148,7 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: var(--f-shadow-xl), inset 0 1px 0 rgba(255, 255, 255, 0.6);
   animation: f-menu-in var(--f-duration-fast) var(--f-ease-out);
+  color: var(--td-misc-text, #222222);
 }
 
 @keyframes f-menu-in {
@@ -1312,9 +1289,11 @@ button {
   transform: scale(1.2);
 }
 
-.td-board-color-dot.is-active {
+.td-board-color-dot.is-active,
+.td-board-color-dot.is-selected {
   border-color: #111;
   transform: scale(1.15);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
 }
 
 
@@ -1334,7 +1313,7 @@ button {
   line-height: 1.5;
   resize: none;
   scrollbar-width: none;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .td-note-textarea::placeholder {
@@ -1490,6 +1469,7 @@ button {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .td-todo-list {
@@ -1514,18 +1494,7 @@ button {
   background: rgba(0, 0, 0, 0.04);
 }
 
-.td-todo-item.is-done .td-todo-text {
-  text-decoration: line-through;
-  opacity: 0.5;
-}
-
-.td-todo-checkbox {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  cursor: pointer;
-  accent-color: #6366f1;
-}
+/* Legacy checkbox — replaced by .f-todo-radio */
 
 .td-todo-text {
   flex: 1;
@@ -1581,28 +1550,61 @@ button {
 }
 
 /* Todo polish */
-.f-todo-count {
-  font-size: var(--f-micro-size);
-  font-weight: var(--f-micro-weight);
-  opacity: 0.45;
-  padding: 0 4px 4px;
-}
-
-.f-todo-empty {
+/* Todo remaining badge */
+.f-todo-remaining {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.5;
   display: flex;
   align-items: center;
-  gap: var(--f-space-2);
-  padding: var(--f-space-3) var(--f-space-2);
-  font-size: var(--f-secondary-size);
-  opacity: 0.5;
+  gap: 2px;
+}
+
+/* Todo counter in board header */
+.f-todo-header-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Circular radio button for todo */
+.f-todo-radio {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0.4;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
   color: inherit;
+  padding: 0;
+}
+
+.f-todo-radio:hover {
+  opacity: 0.7;
+  border-color: #6366f1;
+}
+
+.f-todo-radio.is-checked {
+  background: #6366f1;
+  border-color: #6366f1;
+  opacity: 1;
+  color: #fff;
 }
 
 .td-todo-item.is-done {
   opacity: 0.55;
 }
 
-.td-todo-item.is-done .td-todo-checkbox {
+.td-todo-item.is-done .td-todo-text {
+  text-decoration: line-through;
   opacity: 0.6;
 }
 
@@ -1713,7 +1715,7 @@ button {
 }
 
 
-/* TabDeck logo toggle button */
+/* Frontly logo toggle button */
 .td-logo-btn {
   width: 42px;
   height: 42px;
@@ -1947,11 +1949,60 @@ button {
 }
 
 .td-settings-slider {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 4px;
   margin-bottom: 10px;
-  accent-color: #6366f1;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.12);
+  outline: none;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.td-settings-slider:hover {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.td-settings-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #6366f1;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.td-settings-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+}
+
+.td-settings-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.05);
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.5);
+}
+
+.td-settings-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.td-settings-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #6366f1;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  cursor: grab;
 }
 
 .td-settings-fonts {
@@ -2034,6 +2085,13 @@ button {
 
 .td-settings-action:hover {
   background: rgba(0, 0, 0, 0.08);
+}
+
+.td-settings-hint {
+  font-size: 11px;
+  opacity: 0.7;
+  margin: 2px 0 8px;
+  line-height: 1.4;
 }
 
 .td-settings-danger {
@@ -2163,13 +2221,6 @@ button {
 .react-grid-item {
   transition: transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
               opacity 200ms ease;
-}
-
-/* Toolbar drawer — smoother spring */
-.td-topbar-row {
-  transition:
-    max-width 400ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 250ms ease;
 }
 
 /* Button hover micro-interactions */
@@ -2374,7 +2425,6 @@ button {
 /* Toolbar grain overlay — shared ::after pseudo on toolbar elements */
 .td-workspace-tabs,
 .td-search-bar,
-.td-clock-chip,
 .td-toolbar-trigger,
 .td-toolbar-tray,
 .td-create-board-btn {
@@ -2383,7 +2433,6 @@ button {
 
 .td-workspace-tabs::after,
 .td-search-bar::after,
-.td-clock-chip::after,
 .td-toolbar-trigger::after,
 .td-toolbar-tray::after,
 .td-create-board-btn::after {
@@ -2433,4 +2482,176 @@ a:focus:not(:focus-visible) {
   outline: 2px solid var(--f-accent);
   outline-offset: 1px;
   border-radius: 3px;
+}
+
+/* ─── Icon Strip Modes ─── */
+.f-icon-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  flex: 1;
+  min-height: 0;
+}
+
+.f-icon-strip--v {
+  flex-direction: column;
+}
+
+.f-icon-strip--h {
+  flex-direction: row;
+  flex-wrap: nowrap;
+}
+
+/* Sections: 1px dividers between icons */
+.f-icon-strip--sections .f-icon-item + .f-icon-item::before {
+  content: '';
+  position: absolute;
+  background: currentColor;
+  opacity: 0.15;
+}
+
+.f-icon-strip--sections.f-icon-strip--h .f-icon-item + .f-icon-item::before {
+  left: -3px;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+}
+
+.f-icon-strip--sections.f-icon-strip--v .f-icon-item + .f-icon-item::before {
+  top: -3px;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+}
+
+.f-icon-item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.f-icon-item:hover {
+  transform: scale(1.15);
+  opacity: 0.85;
+}
+
+.f-icon-item:active {
+  transform: scale(0.95);
+}
+
+.f-icon-item img {
+  display: block;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
+.f-icon-strip-empty {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.35;
+  cursor: default;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px dashed currentColor;
+  line-height: 1;
+}
+
+/* Floating mode — no shadow, no background */
+.td-board-panel--floating {
+  box-shadow: none !important;
+}
+
+/* ─── Live Wallpapers ───────────────────────────────────────────────────────
+   Each live wallpaper is a full-screen ::before-less div that sits behind
+   everything. z-index -1 puts it under the board grid but above the page bg.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.td-live-wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Aurora ── */
+@keyframes td-aurora-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.td-live-wallpaper--aurora {
+  background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #1a1a4e, #0a3d62, #1b6ca8);
+  background-size: 400% 400%;
+  animation: td-aurora-shift 14s ease infinite;
+}
+
+/* ── Gradient Wave ── */
+@keyframes td-wave-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.td-live-wallpaper--gradient-wave {
+  background: linear-gradient(-60deg, #fc5c7d, #6a82fb, #05dfd7, #a18cd1, #fda085);
+  background-size: 400% 400%;
+  animation: td-wave-shift 10s ease infinite;
+}
+
+/* ── Particles (dark starfield-like radial pulses) ── */
+@keyframes td-particles-pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.75; }
+  100% { opacity: 1; }
+}
+.td-live-wallpaper--particles {
+  background:
+    radial-gradient(ellipse at 20% 30%, rgba(32, 178, 170, 0.25) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 70%, rgba(72, 61, 139, 0.35) 0%, transparent 60%),
+    linear-gradient(160deg, #0f2027, #203a43, #2c5364);
+  animation: td-particles-pulse 6s ease-in-out infinite;
+}
+
+/* ── Mesh Gradient ── */
+@keyframes td-mesh-float {
+  0%   { background-position: 0% 0%,   100% 100%, 0%   100%; }
+  33%  { background-position: 100% 0%, 0%   100%, 100% 0%;   }
+  66%  { background-position: 50% 50%, 50%  50%,  50%  50%;  }
+  100% { background-position: 0% 0%,   100% 100%, 0%   100%; }
+}
+.td-live-wallpaper--mesh-gradient {
+  background:
+    radial-gradient(ellipse at var(--mx, 20%) var(--my, 30%), rgba(255, 107, 107, 0.4) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 70%, rgba(78, 205, 196, 0.3) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 10%, rgba(150, 90, 230, 0.25) 0%, transparent 55%),
+    #1a1a2e;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+  animation: td-mesh-float 12s ease-in-out infinite;
+}
+
+/* ── Ocean ── */
+@keyframes td-ocean-wave {
+  0%   { background-position: 0% 0%; }
+  50%  { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+.td-live-wallpaper--ocean {
+  background:
+    linear-gradient(180deg, #1a3a4a 0%, #0a1628 60%, #071020 100%),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 40px,
+      rgba(32, 178, 170, 0.04) 40px,
+      rgba(32, 178, 170, 0.04) 80px
+    );
+  background-size: 200% 200%, 100% 100%;
+  animation: td-ocean-wave 16s ease-in-out infinite;
 }

@@ -3,7 +3,7 @@
  * Stores raw Blob data without base64 encoding — no size limits.
  */
 
-const DB_NAME = 'tabdeck-videos';
+const DB_NAME = 'frontly-videos';
 const STORE_NAME = 'wallpapers';
 const DB_VERSION = 1;
 

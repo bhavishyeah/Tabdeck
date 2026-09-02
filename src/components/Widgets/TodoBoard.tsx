@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
 import type { TodoItem } from '../../lib/workspaceTypes';
 
 interface Props {
@@ -9,8 +8,6 @@ interface Props {
 
 export function TodoBoardContent({ todos, onChange }: Props) {
   const [newText, setNewText] = useState('');
-
-  const remaining = todos.filter((t) => !t.done).length;
 
   const addTodo = () => {
     if (!newText.trim()) return;
@@ -33,50 +30,42 @@ export function TodoBoardContent({ todos, onChange }: Props) {
 
   return (
     <div className="td-todo-content">
-      {/* Task count */}
-      {todos.length > 0 && (
-        <div className="f-todo-count">
-          {remaining === 0 ? 'All done' : `${remaining} remaining`}
-        </div>
-      )}
-
       <div className="td-todo-list">
-        {todos.length === 0 && (
-          <div className="f-todo-empty">
-            <CheckCircle2 size={16} strokeWidth={1.5} style={{ opacity: 0.35 }} />
-            <span>No tasks yet</span>
-          </div>
-        )}
         {todos.map((todo) => (
-          <label key={todo.id} className={`td-todo-item ${todo.done ? 'is-done' : ''}`}>
-            <input
-              type="checkbox"
-              checked={todo.done}
-              onChange={() => toggleTodo(todo.id)}
-              className="td-todo-checkbox"
-            />
+          <div key={todo.id} className={`td-todo-item ${todo.done ? 'is-done' : ''}`}>
+            <button
+              type="button"
+              className={`f-todo-radio ${todo.done ? 'is-checked' : ''}`}
+              onClick={() => toggleTodo(todo.id)}
+              aria-label={todo.done ? 'Mark incomplete' : 'Mark complete'}
+            >
+              {todo.done && (
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                  <path d="M1.5 4L3.2 5.8L6.5 2.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
             <span className="td-todo-text">{todo.text}</span>
             <button
               className="td-todo-remove"
               type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                removeTodo(todo.id);
-              }}
+              onClick={() => removeTodo(todo.id)}
               aria-label="Remove task"
             >
               ×
             </button>
-          </label>
+          </div>
         ))}
       </div>
+
+      {/* Inline input — acts as both placeholder and add field */}
       <div className="td-todo-add">
         <input
           className="td-todo-input"
           value={newText}
           onChange={(e) => setNewText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') addTodo(); }}
-          placeholder="+ Add a task..."
+          placeholder={todos.length === 0 ? 'Type a task...' : '+ Add task'}
         />
       </div>
     </div>
