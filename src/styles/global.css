@@ -1941,6 +1941,38 @@ button {
   white-space: nowrap;
 }
 
+/* ── Sub-nav under Appearance ── */
+.f-settings-subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 2px 0 4px 20px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(99, 102, 241, 0.2);
+}
+
+.f-settings-subnav-item {
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #777;
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.f-settings-subnav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+
+.f-settings-subnav-item.is-active {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  font-weight: 600;
+}
+
 /* ── Right content area ── */
 .f-settings-content {
   flex: 1;
@@ -2156,6 +2188,13 @@ button {
 }
 
 /* ── Font grid ── */
+.f-font-grid-full {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 12px 8px;
+}
+
 .f-font-grid {
   display: flex;
   flex-wrap: wrap;

@@ -174,13 +174,23 @@ export function applyGlassCSS(blur: number, saturation: number, _tint?: number, 
 }
 
 type Tab = 'appearance' | 'layout' | 'behavior' | 'data' | 'about';
+type AppearanceSub = 'typography' | 'boards' | 'toolbar' | 'widgets' | 'ui-text';
 
-const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'appearance', label: 'Appearance', icon: <Palette size={15} strokeWidth={2} /> },
-  { id: 'layout',     label: 'Layout',     icon: <LayoutGrid size={15} strokeWidth={2} /> },
-  { id: 'behavior',   label: 'Behaviour',  icon: <Sliders size={15} strokeWidth={2} /> },
-  { id: 'data',       label: 'Data',       icon: <Database size={15} strokeWidth={2} /> },
-  { id: 'about',      label: 'About',      icon: <Info size={15} strokeWidth={2} /> },
+const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode; subs?: { id: AppearanceSub; label: string }[] }[] = [
+  {
+    id: 'appearance', label: 'Appearance', icon: <Palette size={15} strokeWidth={2} />,
+    subs: [
+      { id: 'typography', label: 'Typography' },
+      { id: 'boards',     label: 'Boards' },
+      { id: 'toolbar',    label: 'Toolbar' },
+      { id: 'widgets',    label: 'Widgets' },
+      { id: 'ui-text',    label: 'UI Text' },
+    ],
+  },
+  { id: 'layout',   label: 'Layout',     icon: <LayoutGrid size={15} strokeWidth={2} /> },
+  { id: 'behavior', label: 'Behaviour',  icon: <Sliders size={15} strokeWidth={2} /> },
+  { id: 'data',     label: 'Data',       icon: <Database size={15} strokeWidth={2} /> },
+  { id: 'about',    label: 'About',      icon: <Info size={15} strokeWidth={2} /> },
 ];
 
 interface Props { onResetOnboarding: () => void; }
@@ -188,6 +198,7 @@ interface Props { onResetOnboarding: () => void; }
 export function SettingsButton({ onResetOnboarding }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('appearance');
+  const [appearanceSub, setAppearanceSub] = useState<AppearanceSub>('typography');
   const [storageUsage, setStorageUsage] = useState('...');
   const [confirmReset, setConfirmReset] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -250,22 +261,42 @@ export function SettingsButton({ onResetOnboarding }: Props) {
           <nav className="f-settings-nav">
             <div className="f-settings-nav-title">Settings</div>
             {NAV_ITEMS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`f-settings-nav-item ${tab === item.id ? 'is-active' : ''}`}
-                onClick={() => setTab(item.id)}
-              >
-                <span className="f-nav-icon">{item.icon}</span>
-                <span className="f-nav-label">{item.label}</span>
-              </button>
+              <div key={item.id}>
+                <button
+                  type="button"
+                  className={`f-settings-nav-item ${tab === item.id ? 'is-active' : ''}`}
+                  onClick={() => setTab(item.id)}
+                >
+                  <span className="f-nav-icon">{item.icon}</span>
+                  <span className="f-nav-label">{item.label}</span>
+                </button>
+                {/* Sub-nav for Appearance */}
+                {item.subs && tab === item.id && (
+                  <div className="f-settings-subnav">
+                    {item.subs.map((sub) => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        className={`f-settings-subnav-item ${appearanceSub === sub.id ? 'is-active' : ''}`}
+                        onClick={() => setAppearanceSub(sub.id)}
+                      >
+                        {sub.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </nav>
 
           {/* ── Content area ── */}
           <div className="f-settings-content">
             <div className="f-settings-content-header">
-              <span>{NAV_ITEMS.find((n) => n.id === tab)?.label}</span>
+              <span>
+                {tab === 'appearance'
+                  ? NAV_ITEMS[0].subs?.find((s) => s.id === appearanceSub)?.label ?? 'Appearance'
+                  : NAV_ITEMS.find((n) => n.id === tab)?.label}
+              </span>
               <button className="f-settings-close" type="button" onClick={() => setOpen(false)} aria-label="Close settings">
                 <X size={14} strokeWidth={2} />
               </button>
@@ -276,11 +307,10 @@ export function SettingsButton({ onResetOnboarding }: Props) {
               {/* ═══ APPEARANCE ═══ */}
               {tab === 'appearance' && (
                 <>
-                  <SectionCard title="Typography">
-                    {/* Font picker */}
-                    <div className="f-setting-row">
-                      <span className="f-setting-label">Font</span>
-                      <div className="f-font-grid">
+                  {/* ── Typography ── */}
+                  {appearanceSub === 'typography' && (
+                    <SectionCard title="Font Family">
+                      <div className="f-font-grid-full">
                         {FONTS.map((font) => (
                           <button
                             key={font.name}
@@ -293,87 +323,98 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                           </button>
                         ))}
                       </div>
-                    </div>
-                    <RowSlider label="Size" value={settings.fontSize} min={8} max={14} unit="px" onChange={(v) => settings.update({ fontSize: v })} />
-                    <div className="f-setting-row">
-                      <span className="f-setting-label">Text mode</span>
-                      <div className="f-pill-group">
-                        {(['auto', 'dark', 'light'] as const).map((m) => (
-                          <button key={m} type="button" className={`f-pill ${settings.textMode === m ? 'is-active' : ''}`} onClick={() => settings.update({ textMode: m })}>{m}</button>
-                        ))}
+                      <RowSlider label="Size" value={settings.fontSize} min={8} max={14} unit="px" onChange={(v) => settings.update({ fontSize: v })} />
+                      <div className="f-setting-row">
+                        <span className="f-setting-label">Text mode</span>
+                        <div className="f-pill-group">
+                          {(['auto', 'dark', 'light'] as const).map((m) => (
+                            <button key={m} type="button" className={`f-pill ${settings.textMode === m ? 'is-active' : ''}`} onClick={() => settings.update({ textMode: m })}>{m}</button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  </SectionCard>
+                    </SectionCard>
+                  )}
 
-                  <SectionCard title="Boards">
-                    <RowSlider label="Opacity" value={Math.round(settings.boardOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ boardOpacity: v / 100 })} />
-                    <RowSlider label="Radius" value={settings.boardRadius} min={4} max={24} unit="px" onChange={(v) => settings.update({ boardRadius: v })} />
-                    <RowSlider label="Blur" value={settings.glassBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ glassBlur: v })} />
-                    <RowSlider label="Saturation" value={settings.glassSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ glassSaturation: v })} />
-                    <RowSlider label="Grain" value={settings.grainIntensity} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ grainIntensity: v })} />
-                    {/* All-boards color applies via workspace state mutation */}
-                    <div className="f-setting-row">
-                      <span className="f-setting-label">Color (all)</span>
-                      <div className="f-color-dots">
-                        {COLOR_PALETTE.map((c) => (
-                          <button key={c || 'default'} type="button"
-                            className="f-color-dot"
-                            title={c === 'clear' ? 'Clear / glass' : c || 'Default'}
-                            style={{
-                              background: c === 'clear' ? 'linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1))' : c || 'rgba(250,248,244,0.92)',
-                              border: (c === 'clear' || !c) ? '1.5px dashed rgba(0,0,0,0.22)' : undefined,
-                            }}
-                            onClick={() => {
-                              const ws = useWorkspaceStore.getState().getActiveWorkspace();
-                              if (!ws) return;
-                              const color = c === '' ? undefined : c;
-                              useWorkspaceStore.setState((s) => ({
-                                workspaces: s.workspaces.map((w) =>
-                                  w.id === ws.id
-                                    ? { ...w, boards: w.boards.map((b) => (b.type === 'links' || !b.type) ? { ...b, color } : b), updatedAt: Date.now() }
-                                    : w
-                                ),
-                              }));
-                            }}
-                          />
-                        ))}
+                  {/* ── Boards ── */}
+                  {appearanceSub === 'boards' && (
+                    <SectionCard title="Board Appearance">
+                      <RowSlider label="Opacity" value={Math.round(settings.boardOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ boardOpacity: v / 100 })} />
+                      <RowSlider label="Radius" value={settings.boardRadius} min={4} max={24} unit="px" onChange={(v) => settings.update({ boardRadius: v })} />
+                      <RowSlider label="Blur" value={settings.glassBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ glassBlur: v })} />
+                      <RowSlider label="Saturation" value={settings.glassSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ glassSaturation: v })} />
+                      <RowSlider label="Grain" value={settings.grainIntensity} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ grainIntensity: v })} />
+                      <div className="f-setting-row">
+                        <span className="f-setting-label">Color (all boards)</span>
+                        <div className="f-color-dots">
+                          {COLOR_PALETTE.map((c) => (
+                            <button key={c || 'default'} type="button"
+                              className="f-color-dot"
+                              title={c === 'clear' ? 'Clear / glass' : c || 'Default'}
+                              style={{
+                                background: c === 'clear' ? 'linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1))' : c || 'rgba(250,248,244,0.92)',
+                                border: (c === 'clear' || !c) ? '1.5px dashed rgba(0,0,0,0.22)' : undefined,
+                              }}
+                              onClick={() => {
+                                const ws = useWorkspaceStore.getState().getActiveWorkspace();
+                                if (!ws) return;
+                                const color = c === '' ? undefined : c;
+                                useWorkspaceStore.setState((s) => ({
+                                  workspaces: s.workspaces.map((w) =>
+                                    w.id === ws.id
+                                      ? { ...w, boards: w.boards.map((b) => (b.type === 'links' || !b.type) ? { ...b, color } : b), updatedAt: Date.now() }
+                                      : w
+                                  ),
+                                }));
+                              }}
+                            />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.boardTextColor} onSelect={(c) => settings.update({ boardTextColor: c })} />
-                  </SectionCard>
+                      <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.boardTextColor} onSelect={(c) => settings.update({ boardTextColor: c })} />
+                    </SectionCard>
+                  )}
 
-                  <SectionCard title="Toolbar">
-                    <div className="f-setting-row">
-                      <span className="f-setting-label">Position</span>
-                      <div className="f-pill-group">
-                        {(['left', 'center', 'right'] as const).map((p) => (
-                          <button key={p} type="button" className={`f-pill ${settings.toolbarPosition === p ? 'is-active' : ''}`} onClick={() => settings.update({ toolbarPosition: p })}>{p}</button>
-                        ))}
+                  {/* ── Toolbar ── */}
+                  {appearanceSub === 'toolbar' && (
+                    <SectionCard title="Toolbar Appearance">
+                      <div className="f-setting-row">
+                        <span className="f-setting-label">Position</span>
+                        <div className="f-pill-group">
+                          {(['left', 'center', 'right'] as const).map((p) => (
+                            <button key={p} type="button" className={`f-pill ${settings.toolbarPosition === p ? 'is-active' : ''}`} onClick={() => settings.update({ toolbarPosition: p })}>{p}</button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    <RowSlider label="Opacity" value={Math.round(settings.toolbarOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ toolbarOpacity: v / 100 })} />
-                    <RowSlider label="Radius" value={settings.toolbarRadius} min={4} max={50} unit="px" onChange={(v) => settings.update({ toolbarRadius: v })} />
-                    <RowSlider label="Blur" value={settings.toolbarBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ toolbarBlur: v })} />
-                    <RowSlider label="Saturation" value={settings.toolbarSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ toolbarSaturation: v })} />
-                    <RowSlider label="Grain" value={settings.toolbarGrain} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ toolbarGrain: v })} />
-                    <ColorRow label="Color" colors={['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#1e293b', '#111111']} active={settings.toolbarColor} onSelect={(c) => settings.update({ toolbarColor: c })} />
-                    <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.toolbarTextColor} onSelect={(c) => settings.update({ toolbarTextColor: c })} />
-                  </SectionCard>
+                      <RowSlider label="Opacity" value={Math.round(settings.toolbarOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ toolbarOpacity: v / 100 })} />
+                      <RowSlider label="Radius" value={settings.toolbarRadius} min={4} max={50} unit="px" onChange={(v) => settings.update({ toolbarRadius: v })} />
+                      <RowSlider label="Blur" value={settings.toolbarBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ toolbarBlur: v })} />
+                      <RowSlider label="Saturation" value={settings.toolbarSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ toolbarSaturation: v })} />
+                      <RowSlider label="Grain" value={settings.toolbarGrain} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ toolbarGrain: v })} />
+                      <ColorRow label="Color" colors={['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#1e293b', '#111111']} active={settings.toolbarColor} onSelect={(c) => settings.update({ toolbarColor: c })} />
+                      <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.toolbarTextColor} onSelect={(c) => settings.update({ toolbarTextColor: c })} />
+                    </SectionCard>
+                  )}
 
-                  <SectionCard title="Widgets">
-                    <RowSlider label="Opacity" value={Math.round(settings.widgetOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ widgetOpacity: v / 100 })} />
-                    <RowSlider label="Radius" value={settings.widgetRadius} min={4} max={24} unit="px" onChange={(v) => settings.update({ widgetRadius: v })} />
-                    <RowSlider label="Blur" value={settings.widgetBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ widgetBlur: v })} />
-                    <RowSlider label="Saturation" value={settings.widgetSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ widgetSaturation: v })} />
-                    <RowSlider label="Grain" value={settings.widgetGrain} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ widgetGrain: v })} />
-                    <ColorRow label="Color" colors={COLOR_PALETTE} active={settings.widgetColor} onSelect={(c) => settings.update({ widgetColor: c })} />
-                    <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.widgetTextColor} onSelect={(c) => settings.update({ widgetTextColor: c })} />
-                  </SectionCard>
+                  {/* ── Widgets ── */}
+                  {appearanceSub === 'widgets' && (
+                    <SectionCard title="Widget Appearance">
+                      <RowSlider label="Opacity" value={Math.round(settings.widgetOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ widgetOpacity: v / 100 })} />
+                      <RowSlider label="Radius" value={settings.widgetRadius} min={4} max={24} unit="px" onChange={(v) => settings.update({ widgetRadius: v })} />
+                      <RowSlider label="Blur" value={settings.widgetBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ widgetBlur: v })} />
+                      <RowSlider label="Saturation" value={settings.widgetSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ widgetSaturation: v })} />
+                      <RowSlider label="Grain" value={settings.widgetGrain} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ widgetGrain: v })} />
+                      <ColorRow label="Color" colors={COLOR_PALETTE} active={settings.widgetColor} onSelect={(c) => settings.update({ widgetColor: c })} />
+                      <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.widgetTextColor} onSelect={(c) => settings.update({ widgetTextColor: c })} />
+                    </SectionCard>
+                  )}
 
-                  <SectionCard title="UI Text">
-                    <div className="f-settings-hint-text">Color of context menus, add-link form, and overlays.</div>
-                    <ColorRow label="Color" colors={['', '#222222', '#111111', '#444444', '#ffffff', '#f5f0e8']} active={settings.miscTextColor} onSelect={(c) => settings.update({ miscTextColor: c })} />
-                  </SectionCard>
+                  {/* ── UI Text ── */}
+                  {appearanceSub === 'ui-text' && (
+                    <SectionCard title="Misc UI Text">
+                      <div className="f-settings-hint-text" style={{ padding: '8px 12px' }}>Text color for context menus, add-link form, and overlays.</div>
+                      <ColorRow label="Color" colors={['', '#222222', '#111111', '#444444', '#ffffff', '#f5f0e8']} active={settings.miscTextColor} onSelect={(c) => settings.update({ miscTextColor: c })} />
+                    </SectionCard>
+                  )}
                 </>
               )}
 
