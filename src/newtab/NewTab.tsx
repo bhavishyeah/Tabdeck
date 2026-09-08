@@ -624,55 +624,50 @@ export function NewTab() {
     moveLink(activeWorkspace.id, activeId, overId, fromBoardId, toBoardId);
   };
 
-  // Compute grid layout on every render — ensures height always matches content
-  const gridLayout = (() => {
+  // Compute grid layout — memoised so RGL only receives a new array reference
+  // when something that actually affects positions changes.
+  // KEY PRINCIPLE: boards that have a saved layout are placed EXACTLY at their
+  // saved coordinates. pushDownAndOverflow only runs for boards with NO saved
+  // layout (initial placement). This prevents the controller→RGL→onDragStop
+  // feedback loop from silently shifting untouched boards.
+  const gridLayout = useMemo(() => {
     if (!activeWorkspace) return [];
 
-    // Map from board.id → override width for icon modes (avoids as-any mutation)
     const iconWidthOverride = new Map<string, number>();
+    const needsInitialPlacement: string[] = []; // board ids without a saved layout
 
+    // ── Step 1: compute height + icon-width overrides for every board ──
     const rawLayout = visibleBoards.map((board, index) => {
-      // Compute height from actual content for all board types
       let contentH: number;
       if (board.type === 'clock') {
-        // Clock: time + date = ~3 rows (72px)
         contentH = ROWS_PER_LINK * 3;
       } else if (board.type === 'weather') {
-        // Weather: icon + temp + desc = ~3 rows (72px)
         contentH = ROWS_PER_LINK * 3;
       } else if (board.type === 'note') {
-        // Note: header + text content
-        // Text: 10px font, 1.5 line-height = 15px/line, plus 12px padding
         const lineCount = Math.max((board.noteContent || '').split('\n').length, 2);
         const headerRows = board.hideHeader ? 0 : ROWS_PER_LINK;
-        const textPx = lineCount * 15 + 12; // line-height * lines + padding
+        const textPx = lineCount * 15 + 12;
         const textRows = Math.ceil(textPx / 12);
         contentH = headerRows + textRows;
       } else if (board.type === 'todo') {
-        // Todo: header + todo items + input row
         const todoCount = (board.todos || []).length;
         const headerRows = board.hideHeader ? 0 : ROWS_PER_LINK;
         contentH = headerRows + Math.max(todoCount, 1) * ROWS_PER_LINK + ROWS_PER_LINK;
       } else {
-        // Link boards — check display mode
         const mode = board.displayMode || appSettings.defaultDisplayMode;
         const iconSz = board.iconSize || appSettings.defaultIconSize;
         const linkCount = Math.max(board.links.length, 1);
 
         if (mode === 'icons-vertical') {
-          // Vertical strip: width = iconSize + 8px padding, height = icons stacked
-          const stripW = Math.ceil((iconSz + 8) / 12); // grid cols for the strip width
-          const stripH = Math.ceil((linkCount * (iconSz + 4) + 4) / 12); // icons + gaps + padding
+          const stripW = Math.ceil((iconSz + 8) / 12);
+          const stripH = Math.ceil((linkCount * (iconSz + 4) + 4) / 12);
           contentH = stripH;
-          // Override width for this board — we'll store it in a local var
-          // and apply below
           iconWidthOverride.set(board.id, Math.max(stripW, 2));
         } else if (mode === 'icons-horizontal' || mode === 'icons-floating') {
-          // Horizontal strip: height = iconSize + padding, width = icons in a row (no header in icon modes)
           const sections = board.showSections ?? appSettings.defaultShowSections;
-          const iconSlotW = iconSz + (sections ? 5 : 4); // icon + gap (+ 1px divider)
-          const totalPx = (linkCount * iconSlotW) + 8; // padding
-          const stripH = Math.ceil((iconSz + 8) / 12); // height in grid rows
+          const iconSlotW = iconSz + (sections ? 5 : 4);
+          const totalPx = (linkCount * iconSlotW) + 8;
+          const stripH = Math.ceil((iconSz + 8) / 12);
           contentH = Math.max(stripH, 2);
           iconWidthOverride.set(board.id, Math.max(Math.ceil(totalPx / 12), MIN_W));
         } else {
@@ -680,18 +675,17 @@ export function NewTab() {
         }
       }
 
+      // ── Boards WITH a saved layout: use saved x/y/w exactly. ──
+      // Only h is derived from content (because content can change without a drag).
       if (board.layout) {
-        // Layouts written under a coarser grid (24px, or the legacy 172-col
-        // system) are rescaled to 12px cells on read.
         const savedStep = board.layout.gridStep ?? 24;
         const scale = savedStep / GRID_STEP;
 
         let x = Math.round(board.layout.x * scale);
         let w = Math.round(board.layout.w * scale);
         let y = Math.round(board.layout.y * scale);
-        const h = contentH;
 
-        // Legacy 172-col layouts can still overflow after scaling — fit them.
+        // Legacy 172-col layouts need width rescaling
         if (w > grid.cols) {
           x = Math.round((x * grid.cols) / OLD_COLS);
           w = Math.round((w * grid.cols) / OLD_COLS);
@@ -700,50 +694,93 @@ export function NewTab() {
         w = Math.min(Math.max(w, MIN_W), grid.cols);
         x = Math.max(Math.min(x, grid.cols - w), 0);
 
-        // Icon modes override width
         const iconW = iconWidthOverride.get(board.id);
         if (iconW) {
           w = Math.min(iconW, grid.cols);
           x = Math.max(Math.min(x, grid.cols - w), 0);
         }
 
-        // Only snap y — never clamp it to the viewport, or shrinking the window
-        // would drag boards upward and persist that as their new position.
         y = snapEven(y);
 
-        return { i: board.id, x, y, w, h, minW: iconW || MIN_W };
+        return { i: board.id, x, y, w, h: contentH, minW: iconW || MIN_W };
       }
 
-      // No saved layout: spread boards left-to-right, wrapping into rows
-      const h = contentH;
+      // ── Boards WITHOUT a saved layout: index-based initial placement. ──
+      // These will be saved to the store on the next frame (see useEffect below).
+      needsInitialPlacement.push(board.id);
       const iconW = iconWidthOverride.get(board.id);
       const finalW = iconW || DEFAULT_W;
       const perRow = Math.max(Math.floor(grid.cols / (finalW + 1)), 1);
       const col = index % perRow;
       const row = Math.floor(index / perRow);
-
       const x = Math.max(Math.min(col * (finalW + 1), grid.cols - finalW), 0);
-      const y = snapEven(row * (h + ROWS_PER_LINK));
+      const y = snapEven(row * (contentH + ROWS_PER_LINK));
 
-      return { i: board.id, x, y, w: finalW, h, minW: iconW || MIN_W };
+      return { i: board.id, x, y, w: finalW, h: contentH, minW: iconW || MIN_W };
     });
 
-    // Push boards down to maintain gaps, and overflow to next column if needed
-    return pushDownAndOverflow(rawLayout, grid.cols, grid.maxRows);
-  })();
+    // ── Step 2: pushDownAndOverflow ONLY on the unsaved-layout boards. ──
+    // Boards with saved layouts are already at their correct saved positions and
+    // must NOT be moved by this function. Mixing them in would cause the compaction
+    // to shift them, and those shifted positions would eventually be persisted.
+    const savedItems = rawLayout.filter((item) => !needsInitialPlacement.includes(item.i));
+    const unsavedItems = rawLayout.filter((item) => needsInitialPlacement.includes(item.i));
 
-  const handleGridLayoutChange = (layout: RGL.Layout[]) => {
+    // Place unsaved boards avoiding overlap with saved boards
+    const compacted = unsavedItems.length > 0
+      ? pushDownAndOverflow([...savedItems, ...unsavedItems], grid.cols, grid.maxRows)
+          .filter((item) => needsInitialPlacement.includes(item.i))
+      : [];
+
+    return [...savedItems, ...compacted];
+  }, [
+    activeWorkspace,
+    visibleBoards,
+    grid.cols,
+    grid.maxRows,
+    appSettings.defaultDisplayMode,
+    appSettings.defaultIconSize,
+    appSettings.defaultShowSections,
+  ]);
+
+  // Save initial placement for any boards that don't have a saved layout yet.
+  // Without this they get index-based coordinates that shift whenever the board
+  // list changes (add/remove/search).
+  useEffect(() => {
     if (!activeWorkspace) return;
+    const unsaved = gridLayout.filter((item) => {
+      const board = activeWorkspace.boards.find((b) => b.id === item.i);
+      return board && !board.layout;
+    });
+    if (unsaved.length === 0) return;
 
-    const layouts = layout.map((item) => ({
+    updateBoardLayouts(activeWorkspace.id, unsaved.map((item) => ({
       id: item.i,
       x: item.x,
-      y: snapEven(item.y),
+      y: item.y,
       w: item.w,
       h: item.h,
-    }));
+    })));
+  // Only run when the workspace changes or boards are added/removed
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspace?.id, activeWorkspace?.boards.length]);
 
-    updateBoardLayouts(activeWorkspace.id, layouts);
+  // Only persist the single item that was actually moved or resized.
+  // RGL passes (layout, oldItem, newItem) — we only need newItem.
+  const handleGridLayoutChange = (
+    _layout: RGL.Layout[],
+    _oldItem: RGL.Layout,
+    newItem: RGL.Layout
+  ) => {
+    if (!activeWorkspace) return;
+
+    updateBoardLayouts(activeWorkspace.id, [{
+      id: newItem.i,
+      x: newItem.x,
+      y: snapEven(newItem.y),
+      w: newItem.w,
+      h: newItem.h,
+    }]);
   };
 
 const handleImportBookmarks = async (folderId?: string) => {

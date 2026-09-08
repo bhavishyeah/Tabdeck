@@ -435,8 +435,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               };
 
               const prev = board.layout;
+              // Guard: skip write if nothing changed (works for both defined and undefined prev)
               if (
-                prev &&
+                prev !== undefined &&
                 prev.x === next.x &&
                 prev.y === next.y &&
                 prev.w === next.w &&
