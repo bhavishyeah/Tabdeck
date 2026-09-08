@@ -634,7 +634,6 @@ export function NewTab() {
     if (!activeWorkspace) return [];
 
     const iconWidthOverride = new Map<string, number>();
-    const needsInitialPlacement: string[] = []; // board ids without a saved layout
 
     // ── Step 1: compute height + icon-width overrides for every board ──
     const rawLayout = visibleBoards.map((board, index) => {
@@ -707,7 +706,6 @@ export function NewTab() {
 
       // ── Boards WITHOUT a saved layout: index-based initial placement. ──
       // These will be saved to the store on the next frame (see useEffect below).
-      needsInitialPlacement.push(board.id);
       const iconW = iconWidthOverride.get(board.id);
       const finalW = iconW || DEFAULT_W;
       const perRow = Math.max(Math.floor(grid.cols / (finalW + 1)), 1);
@@ -719,20 +717,15 @@ export function NewTab() {
       return { i: board.id, x, y, w: finalW, h: contentH, minW: iconW || MIN_W };
     });
 
-    // ── Step 2: pushDownAndOverflow ONLY on the unsaved-layout boards. ──
-    // Boards with saved layouts are already at their correct saved positions and
-    // must NOT be moved by this function. Mixing them in would cause the compaction
-    // to shift them, and those shifted positions would eventually be persisted.
-    const savedItems = rawLayout.filter((item) => !needsInitialPlacement.includes(item.i));
-    const unsavedItems = rawLayout.filter((item) => needsInitialPlacement.includes(item.i));
-
-    // Place unsaved boards avoiding overlap with saved boards
-    const compacted = unsavedItems.length > 0
-      ? pushDownAndOverflow([...savedItems, ...unsavedItems], grid.cols, grid.maxRows)
-          .filter((item) => needsInitialPlacement.includes(item.i))
-      : [];
-
-    return [...savedItems, ...compacted];
+    // ── Step 2: run pushDownAndOverflow on ALL boards for display. ──
+    // This ensures that when a board grows (link added), boards below it
+    // visually shift down to maintain the 24px gap and wrap to the next
+    // column if they'd overflow the canvas.
+    //
+    // IMPORTANT: these display-adjusted positions are NOT written back to
+    // the store here. Only handleGridLayoutChange (onDragStop/onResizeStop)
+    // persists positions — and it only saves the single moved board.
+    return pushDownAndOverflow(rawLayout, grid.cols, grid.maxRows);
   }, [
     activeWorkspace,
     visibleBoards,
