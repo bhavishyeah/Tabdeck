@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Settings as SettingsIcon, X, AlertTriangle } from 'lucide-react';
+import {
+  Settings as SettingsIcon, X, AlertTriangle,
+  Palette, Sliders, LayoutGrid, Database, Info
+} from 'lucide-react';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { getStarterTemplateBoards, getStarterTemplateJSON } from '../../lib/starterTemplate';
@@ -47,52 +50,84 @@ const SHORTCUTS = [
   { keys: 'Alt+X', action: 'Wipe' },
 ];
 
-// ─── Cursor-following tooltip slider ───
 interface SliderProps {
-  min: number;
-  max: number;
-  step?: number;
-  value: number;
-  onChange: (value: number) => void;
-  tooltip?: string;
+  min: number; max: number; step?: number; value: number;
+  onChange: (value: number) => void; tooltip?: string;
 }
 
 function TipSlider({ min, max, step = 1, value, onChange, tooltip }: SliderProps) {
-  const [showTip, setShowTip] = useState(false);
   const [localValue, setLocalValue] = useState(value);
   const isDragging = useRef(false);
-
-  // Sync external value when not dragging
-  useEffect(() => {
-    if (!isDragging.current) setLocalValue(value);
-  }, [value]);
-
+  useEffect(() => { if (!isDragging.current) setLocalValue(value); }, [value]);
   return (
-    <div
-      className="f-slider-wrap"
-      onMouseEnter={() => tooltip && setShowTip(true)}
-      onMouseLeave={() => setShowTip(false)}
-    >
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={localValue}
+    <div className="f-slider-wrap" title={tooltip}>
+      <input type="range" min={min} max={max} step={step} value={localValue}
+        className="td-settings-slider"
         onMouseDown={() => { isDragging.current = true; }}
-        onInput={(e) => {
-          const v = +(e.target as HTMLInputElement).value;
-          setLocalValue(v);
-          onChange(v);
-        }}
+        onInput={(e) => { const v = +(e.target as HTMLInputElement).value; setLocalValue(v); onChange(v); }}
         onMouseUp={() => { isDragging.current = false; }}
         onTouchStart={() => { isDragging.current = true; }}
         onTouchEnd={() => { isDragging.current = false; onChange(localValue); }}
-        className="td-settings-slider"
       />
-      {showTip && tooltip && (
-        <div className="f-slider-tip">{tooltip}</div>
-      )}
+    </div>
+  );
+}
+
+const COLOR_PALETTE = ['', 'clear', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#111111'];
+const TEXT_PALETTE = ['', '#ffffff', '#111111', '#f5f0e8', '#cccccc'];
+
+function ColorRow({
+  label, colors, active, onSelect,
+}: {
+  label: string;
+  colors: string[];
+  active: string;
+  onSelect: (c: string) => void;
+}) {
+  return (
+    <div className="f-setting-row">
+      <span className="f-setting-label">{label}</span>
+      <div className="f-color-dots">
+        {colors.map((c) => (
+          <button
+            key={c || 'default'}
+            type="button"
+            title={c === 'clear' ? 'Clear / glass' : c || 'Auto'}
+            className={`f-color-dot ${active === c ? 'is-active' : ''}`}
+            style={{
+              background: c === 'clear'
+                ? 'linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1))'
+                : c || 'linear-gradient(135deg, #fff 50%, #333 50%)',
+              border: (c === 'clear' || !c) ? '1.5px dashed rgba(0,0,0,0.22)' : undefined,
+            }}
+            onClick={() => onSelect(c)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RowSlider({ label, value, min, max, step, onChange, unit = '' }: {
+  label: string; value: number; min: number; max: number; step?: number;
+  onChange: (v: number) => void; unit?: string;
+}) {
+  return (
+    <div className="f-setting-row f-setting-row--slider">
+      <div className="f-row-top">
+        <span className="f-setting-label">{label}</span>
+        <span className="f-setting-value">{value}{unit}</span>
+      </div>
+      <TipSlider min={min} max={max} step={step} value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="f-settings-card">
+      <div className="f-settings-card-title">{title}</div>
+      {children}
     </div>
   );
 }
@@ -101,7 +136,6 @@ export function applyFontCSS(fontFamily: string, fontSize: number) {
   const font = FONTS.find((f) => f.name === fontFamily);
   if (font) document.documentElement.style.setProperty('--td-font', font.value);
   document.documentElement.style.setProperty('--td-font-size', `${fontSize}px`);
-
   if (fontFamily !== 'Montserrat') {
     const url = FONT_URLS[fontFamily];
     if (url && !document.querySelector(`link[href="${url}"]`)) {
@@ -115,9 +149,7 @@ export function applyFontCSS(fontFamily: string, fontSize: number) {
 
 export function applyGlassCSS(blur: number, saturation: number, _tint?: number, toolbarBlur?: number, toolbarSaturation?: number, _toolbarTint?: number, toolbarOpacity?: number, toolbarRadius?: number, toolbarGrain?: number, toolbarColor?: string, toolbarTextColor?: string, miscTextColor?: string) {
   const root = document.documentElement.style;
-  // Board glass
   root.setProperty('--td-backdrop', `blur(${blur}px) saturate(${saturation}%)`);
-  // Toolbar glass
   const tb = toolbarBlur ?? blur;
   const ts = toolbarSaturation ?? saturation;
   const to = toolbarOpacity ?? 0.4;
@@ -137,31 +169,32 @@ export function applyGlassCSS(blur: number, saturation: number, _tint?: number, 
     root.setProperty('--td-toolbar-bg', `rgba(255, 255, 255, ${to})`);
   }
   root.setProperty('--td-toolbar-color', tc);
-  // Toolbar text color
   root.setProperty('--td-toolbar-text', toolbarTextColor || '');
-  // Misc text color (context menus, add-link form, misc UI)
   root.setProperty('--td-misc-text', miscTextColor || '#222222');
 }
 
-type Tab = 'appearance' | 'behavior' | 'data' | 'info';
+type Tab = 'appearance' | 'layout' | 'behavior' | 'data' | 'about';
 
-interface Props {
-  onResetOnboarding: () => void;
-}
+const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: 'appearance', label: 'Appearance', icon: <Palette size={15} strokeWidth={2} /> },
+  { id: 'layout',     label: 'Layout',     icon: <LayoutGrid size={15} strokeWidth={2} /> },
+  { id: 'behavior',   label: 'Behaviour',  icon: <Sliders size={15} strokeWidth={2} /> },
+  { id: 'data',       label: 'Data',       icon: <Database size={15} strokeWidth={2} /> },
+  { id: 'about',      label: 'About',      icon: <Info size={15} strokeWidth={2} /> },
+];
+
+interface Props { onResetOnboarding: () => void; }
 
 export function SettingsButton({ onResetOnboarding }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('appearance');
   const [storageUsage, setStorageUsage] = useState('...');
+  const [confirmReset, setConfirmReset] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const settings = useSettingsStore();
 
-  // Apply font CSS on mount and when font changes
-  useEffect(() => {
-    applyFontCSS(settings.fontFamily, settings.fontSize);
-  }, [settings.fontFamily, settings.fontSize]);
+  useEffect(() => { applyFontCSS(settings.fontFamily, settings.fontSize); }, [settings.fontFamily, settings.fontSize]);
 
-  // Apply glass effects on mount and when changed
   useEffect(() => {
     applyGlassCSS(
       settings.glassBlur, settings.glassSaturation, settings.glassTint,
@@ -171,7 +204,6 @@ export function SettingsButton({ onResetOnboarding }: Props) {
     );
   }, [settings.glassBlur, settings.glassSaturation, settings.glassTint, settings.toolbarBlur, settings.toolbarSaturation, settings.toolbarTint, settings.toolbarOpacity, settings.toolbarRadius, settings.toolbarGrain, settings.toolbarColor, settings.toolbarTextColor, settings.miscTextColor]);
 
-  // Sync board radius to CSS variable (used by resize handle)
   useEffect(() => {
     document.documentElement.style.setProperty('--td-board-radius', `${settings.boardRadius}px`);
   }, [settings.boardRadius]);
@@ -193,371 +225,300 @@ export function SettingsButton({ onResetOnboarding }: Props) {
     }
   }, [open, tab]);
 
-  const [confirmReset, setConfirmReset] = useState(false);
-
   const handleClearAll = () => {
-    if (!confirmReset) {
-      setConfirmReset(true);
-      return;
-    }
+    if (!confirmReset) { setConfirmReset(true); return; }
     chrome.storage.local.clear();
     localStorage.clear();
     window.location.reload();
   };
 
   return (
-    <div className="td-settings-wrapper" ref={panelRef}>
-      <button className="td-settings-btn" type="button" onClick={() => setOpen((v) => !v)} title="Settings">
+    <div className="f-settings-root" ref={panelRef}>
+      <button
+        className="td-settings-btn"
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Settings"
+        aria-label="Open settings"
+      >
         <SettingsIcon size={16} strokeWidth={2} />
       </button>
 
       {open && (
-        <div className="td-settings-panel">
-          <div className="td-settings-header">
-            <span className="td-settings-panel-title">Settings</span>
-            <button className="td-settings-close" type="button" onClick={() => setOpen(false)}><X size={14} /></button>
-          </div>
-
-          <div className="td-settings-tabs">
-            {(['appearance', 'behavior', 'data', 'info'] as Tab[]).map((t) => (
-              <button key={t} className={`td-settings-tab ${tab === t ? 'is-active' : ''}`} type="button" onClick={() => setTab(t)}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
+        <div className="f-settings-panel" role="dialog" aria-label="Settings">
+          {/* ── Left sidebar nav ── */}
+          <nav className="f-settings-nav">
+            <div className="f-settings-nav-title">Settings</div>
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`f-settings-nav-item ${tab === item.id ? 'is-active' : ''}`}
+                onClick={() => setTab(item.id)}
+              >
+                <span className="f-nav-icon">{item.icon}</span>
+                <span className="f-nav-label">{item.label}</span>
               </button>
             ))}
-          </div>
+          </nav>
 
-          <div className="td-settings-body">
-            {tab === 'appearance' && (
-              <>
-                {/* ─── Typography ─── */}
-                <label className="td-settings-section-title">Typography</label>
+          {/* ── Content area ── */}
+          <div className="f-settings-content">
+            <div className="f-settings-content-header">
+              <span>{NAV_ITEMS.find((n) => n.id === tab)?.label}</span>
+              <button className="f-settings-close" type="button" onClick={() => setOpen(false)} aria-label="Close settings">
+                <X size={14} strokeWidth={2} />
+              </button>
+            </div>
 
-                <label className="td-settings-label">Font</label>
-                <div className="td-settings-fonts">
-                  {FONTS.map((font) => (
-                    <button key={font.name} className={`td-settings-font-btn ${settings.fontFamily === font.name ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ fontFamily: font.name })} style={{ fontFamily: font.value }}>
-                      {font.name}
-                    </button>
-                  ))}
-                </div>
+            <div className="f-settings-scroll">
 
-                <label className="td-settings-label">Font Size ({settings.fontSize}px)</label>
-                <TipSlider min={8} max={14} value={settings.fontSize} onChange={(v) => settings.update({ fontSize: v })} tooltip="Base font size for all text content" />
+              {/* ═══ APPEARANCE ═══ */}
+              {tab === 'appearance' && (
+                <>
+                  <SectionCard title="Typography">
+                    {/* Font picker */}
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Font</span>
+                      <div className="f-font-grid">
+                        {FONTS.map((font) => (
+                          <button
+                            key={font.name}
+                            type="button"
+                            className={`f-font-chip ${settings.fontFamily === font.name ? 'is-active' : ''}`}
+                            style={{ fontFamily: font.value }}
+                            onClick={() => settings.update({ fontFamily: font.name })}
+                          >
+                            {font.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <RowSlider label="Size" value={settings.fontSize} min={8} max={14} unit="px" onChange={(v) => settings.update({ fontSize: v })} />
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Text mode</span>
+                      <div className="f-pill-group">
+                        {(['auto', 'dark', 'light'] as const).map((m) => (
+                          <button key={m} type="button" className={`f-pill ${settings.textMode === m ? 'is-active' : ''}`} onClick={() => settings.update({ textMode: m })}>{m}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </SectionCard>
 
-                <label className="td-settings-label">Text Mode</label>
-                <div className="td-settings-row">
-                  {(['auto', 'dark', 'light'] as const).map((m) => (
-                    <button key={m} className={`td-settings-pill ${settings.textMode === m ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ textMode: m })}>{m}</button>
-                  ))}
-                </div>
+                  <SectionCard title="Boards">
+                    <RowSlider label="Opacity" value={Math.round(settings.boardOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ boardOpacity: v / 100 })} />
+                    <RowSlider label="Radius" value={settings.boardRadius} min={4} max={24} unit="px" onChange={(v) => settings.update({ boardRadius: v })} />
+                    <RowSlider label="Blur" value={settings.glassBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ glassBlur: v })} />
+                    <RowSlider label="Saturation" value={settings.glassSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ glassSaturation: v })} />
+                    <RowSlider label="Grain" value={settings.grainIntensity} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ grainIntensity: v })} />
+                    {/* All-boards color applies via workspace state mutation */}
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Color (all)</span>
+                      <div className="f-color-dots">
+                        {COLOR_PALETTE.map((c) => (
+                          <button key={c || 'default'} type="button"
+                            className="f-color-dot"
+                            title={c === 'clear' ? 'Clear / glass' : c || 'Default'}
+                            style={{
+                              background: c === 'clear' ? 'linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1))' : c || 'rgba(250,248,244,0.92)',
+                              border: (c === 'clear' || !c) ? '1.5px dashed rgba(0,0,0,0.22)' : undefined,
+                            }}
+                            onClick={() => {
+                              const ws = useWorkspaceStore.getState().getActiveWorkspace();
+                              if (!ws) return;
+                              const color = c === '' ? undefined : c;
+                              useWorkspaceStore.setState((s) => ({
+                                workspaces: s.workspaces.map((w) =>
+                                  w.id === ws.id
+                                    ? { ...w, boards: w.boards.map((b) => (b.type === 'links' || !b.type) ? { ...b, color } : b), updatedAt: Date.now() }
+                                    : w
+                                ),
+                              }));
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.boardTextColor} onSelect={(c) => settings.update({ boardTextColor: c })} />
+                  </SectionCard>
 
-                <div className="td-settings-divider" />
+                  <SectionCard title="Toolbar">
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Position</span>
+                      <div className="f-pill-group">
+                        {(['left', 'center', 'right'] as const).map((p) => (
+                          <button key={p} type="button" className={`f-pill ${settings.toolbarPosition === p ? 'is-active' : ''}`} onClick={() => settings.update({ toolbarPosition: p })}>{p}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <RowSlider label="Opacity" value={Math.round(settings.toolbarOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ toolbarOpacity: v / 100 })} />
+                    <RowSlider label="Radius" value={settings.toolbarRadius} min={4} max={50} unit="px" onChange={(v) => settings.update({ toolbarRadius: v })} />
+                    <RowSlider label="Blur" value={settings.toolbarBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ toolbarBlur: v })} />
+                    <RowSlider label="Saturation" value={settings.toolbarSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ toolbarSaturation: v })} />
+                    <RowSlider label="Grain" value={settings.toolbarGrain} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ toolbarGrain: v })} />
+                    <ColorRow label="Color" colors={['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#1e293b', '#111111']} active={settings.toolbarColor} onSelect={(c) => settings.update({ toolbarColor: c })} />
+                    <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.toolbarTextColor} onSelect={(c) => settings.update({ toolbarTextColor: c })} />
+                  </SectionCard>
 
-                {/* ─── Board ─── */}
-                <label className="td-settings-section-title">Board</label>
+                  <SectionCard title="Widgets">
+                    <RowSlider label="Opacity" value={Math.round(settings.widgetOpacity * 100)} min={5} max={100} unit="%" onChange={(v) => settings.update({ widgetOpacity: v / 100 })} />
+                    <RowSlider label="Radius" value={settings.widgetRadius} min={4} max={24} unit="px" onChange={(v) => settings.update({ widgetRadius: v })} />
+                    <RowSlider label="Blur" value={settings.widgetBlur} min={0} max={24} unit="px" onChange={(v) => settings.update({ widgetBlur: v })} />
+                    <RowSlider label="Saturation" value={settings.widgetSaturation} min={100} max={300} step={10} unit="%" onChange={(v) => settings.update({ widgetSaturation: v })} />
+                    <RowSlider label="Grain" value={settings.widgetGrain} min={0} max={100} step={5} unit="%" onChange={(v) => settings.update({ widgetGrain: v })} />
+                    <ColorRow label="Color" colors={COLOR_PALETTE} active={settings.widgetColor} onSelect={(c) => settings.update({ widgetColor: c })} />
+                    <ColorRow label="Text color" colors={TEXT_PALETTE} active={settings.widgetTextColor} onSelect={(c) => settings.update({ widgetTextColor: c })} />
+                  </SectionCard>
 
-                <label className="td-settings-label">Opacity ({Math.round(settings.boardOpacity * 100)}%)</label>
-                <TipSlider min={5} max={100} value={Math.round(settings.boardOpacity * 100)} onChange={(v) => settings.update({ boardOpacity: v / 100 })} tooltip="Board background transparency — lower values show more wallpaper" />
+                  <SectionCard title="UI Text">
+                    <div className="f-settings-hint-text">Color of context menus, add-link form, and overlays.</div>
+                    <ColorRow label="Color" colors={['', '#222222', '#111111', '#444444', '#ffffff', '#f5f0e8']} active={settings.miscTextColor} onSelect={(c) => settings.update({ miscTextColor: c })} />
+                  </SectionCard>
+                </>
+              )}
 
-                <label className="td-settings-label">Border Radius ({settings.boardRadius}px)</label>
-                <TipSlider min={4} max={24} value={settings.boardRadius} onChange={(v) => settings.update({ boardRadius: v })} tooltip="Corner roundness of all boards" />
+              {/* ═══ LAYOUT ═══ */}
+              {tab === 'layout' && (
+                <>
+                  <SectionCard title="Default Board">
+                    <RowSlider label="Width" value={settings.defaultBoardW * GRID_STEP} min={108} max={360} step={12}
+                      unit="px" onChange={(v) => settings.update({ defaultBoardW: Math.round(v / GRID_STEP) })} />
+                  </SectionCard>
 
-                <label className="td-settings-label">Blur ({settings.glassBlur}px)</label>
-                <TipSlider min={0} max={24} value={settings.glassBlur} onChange={(v) => settings.update({ glassBlur: v })} tooltip="Backdrop blur intensity behind boards" />
+                  <SectionCard title="Display Mode">
+                    <div className="f-setting-row f-setting-row--block">
+                      <span className="f-setting-label" style={{ marginBottom: 6 }}>Default mode</span>
+                      <div className="f-pill-group f-pill-group--wrap">
+                        {([
+                          ['default', 'List'],
+                          ['icons-vertical', 'V-Icons'],
+                          ['icons-horizontal', 'H-Icons'],
+                          ['icons-floating', 'Floating'],
+                        ] as const).map(([m, label]) => (
+                          <button key={m} type="button"
+                            className={`f-pill ${settings.defaultDisplayMode === m ? 'is-active' : ''}`}
+                            onClick={() => settings.update({ defaultDisplayMode: m })}>{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Icon size</span>
+                      <div className="f-pill-group">
+                        {([12, 24, 36, 48] as const).map((sz) => (
+                          <button key={sz} type="button" className={`f-pill ${settings.defaultIconSize === sz ? 'is-active' : ''}`} onClick={() => settings.update({ defaultIconSize: sz })}>{sz}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Sections</span>
+                      <button
+                        type="button"
+                        className={`f-toggle ${settings.defaultShowSections ? 'is-on' : ''}`}
+                        onClick={() => settings.update({ defaultShowSections: !settings.defaultShowSections })}
+                        aria-label="Toggle sections"
+                      >
+                        <span className="f-toggle-knob" />
+                      </button>
+                    </div>
+                  </SectionCard>
+                </>
+              )}
 
-                <label className="td-settings-label">Saturation ({settings.glassSaturation}%)</label>
-                <TipSlider min={100} max={300} step={10} value={settings.glassSaturation} onChange={(v) => settings.update({ glassSaturation: v })} tooltip="Color vibrancy of the wallpaper through boards" />
+              {/* ═══ BEHAVIOUR ═══ */}
+              {tab === 'behavior' && (
+                <>
+                  <SectionCard title="Automation">
+                    <RowSlider label="Auto-close toolbar" value={settings.autoCloseToolbar} min={0} max={30} step={5}
+                      unit={settings.autoCloseToolbar === 0 ? ' (Off)' : 's'} onChange={(v) => settings.update({ autoCloseToolbar: v })} />
+                    <RowSlider label="Auto-lock layout" value={settings.autoLock} min={0} max={60} step={10}
+                      unit={settings.autoLock === 0 ? ' (Off)' : 's'} onChange={(v) => settings.update({ autoLock: v })} />
+                  </SectionCard>
 
-                <label className="td-settings-label">Grain ({settings.grainIntensity}%)</label>
-                <TipSlider min={0} max={100} step={5} value={settings.grainIntensity} onChange={(v) => settings.update({ grainIntensity: v })} tooltip="Film grain texture overlay on boards" />
+                  <SectionCard title="Links">
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Open in</span>
+                      <div className="f-pill-group">
+                        <button type="button" className={`f-pill ${settings.openLinksNewTab ? 'is-active' : ''}`} onClick={() => settings.update({ openLinksNewTab: true })}>New tab</button>
+                        <button type="button" className={`f-pill ${!settings.openLinksNewTab ? 'is-active' : ''}`} onClick={() => settings.update({ openLinksNewTab: false })}>Same tab</button>
+                      </div>
+                    </div>
+                  </SectionCard>
+                </>
+              )}
 
-                <label className="td-settings-label">Color (all boards)</label>
-                <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
-                  {['', 'clear', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#111111'].map((c) => (
+              {/* ═══ DATA ═══ */}
+              {tab === 'data' && (
+                <>
+                  <SectionCard title="Storage">
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Used</span>
+                      <span className="f-setting-value-text">{storageUsage}</span>
+                    </div>
+                    <button className="f-settings-action-btn" type="button" onClick={onResetOnboarding}>Re-run onboarding</button>
+                  </SectionCard>
+
+                  <SectionCard title="Starter Template">
+                    <p className="f-settings-hint-text">Load 4 demo boards — Dev, Social, Design, Productivity.</p>
                     <button
-                      key={c}
-                      className="td-board-color-dot"
+                      className="f-settings-action-btn"
                       type="button"
-                      style={{ background: c === 'clear' ? 'linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1))' : c || 'rgba(250,248,244,0.92)', border: c === 'clear' ? '2px dashed rgba(255,255,255,0.5)' : undefined }}
-                      title={c === 'clear' ? 'Clear glass (no color)' : c || 'Default'}
                       onClick={() => {
                         const ws = useWorkspaceStore.getState().getActiveWorkspace();
                         if (!ws) return;
-                        const color = c === '' ? undefined : c;
-                        useWorkspaceStore.setState((s) => ({
-                          workspaces: s.workspaces.map((w) =>
-                            w.id === ws.id
-                              ? { ...w, boards: w.boards.map((b) => (b.type === 'links' || !b.type) ? { ...b, color } : b), updatedAt: Date.now() }
-                              : w
-                          ),
-                        }));
+                        getStarterTemplateBoards().forEach((board) => useWorkspaceStore.getState().importBoard(ws.id, board));
+                        const blob = new Blob([getStarterTemplateJSON()], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = 'frontly-starter-template.json'; a.click();
+                        URL.revokeObjectURL(url);
                       }}
-                    />
-                  ))}
-                </div>
+                    >Load Starter Template</button>
+                  </SectionCard>
 
-                <label className="td-settings-label">Text Color</label>
-                <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
-                  {(['', '#ffffff', '#111111', '#f5f0e8', '#cccccc'] as const).map((c) => (
-                    <button
-                      key={c}
-                      className={`td-board-color-dot ${settings.boardTextColor === c ? 'is-selected' : ''}`}
-                      type="button"
-                      style={{ background: c || 'linear-gradient(135deg, #fff 50%, #111 50%)', border: !c ? '2px dashed rgba(0,0,0,0.2)' : undefined }}
-                      title={c || 'Auto'}
-                      onClick={() => settings.update({ boardTextColor: c })}
-                    />
-                  ))}
-                </div>
+                  <SectionCard title="Danger Zone">
+                    {!confirmReset ? (
+                      <button className="f-settings-danger-btn" type="button" onClick={handleClearAll}>Factory reset</button>
+                    ) : (
+                      <div className="f-reset-confirm">
+                        <div className="f-reset-warning">
+                          <AlertTriangle size={13} strokeWidth={2} />
+                          <span>This permanently removes all Frontly data.</span>
+                        </div>
+                        <div className="f-reset-actions">
+                          <button className="f-reset-cancel" type="button" onClick={() => setConfirmReset(false)}>Cancel</button>
+                          <button className="f-reset-delete" type="button" onClick={handleClearAll}>Delete everything</button>
+                        </div>
+                      </div>
+                    )}
+                  </SectionCard>
+                </>
+              )}
 
-                <div className="td-settings-divider" />
-
-                {/* ─── Toolbar ─── */}
-                <label className="td-settings-section-title">Toolbar</label>
-
-                <label className="td-settings-label">Position</label>
-                <div className="td-settings-row">
-                  {(['left', 'center', 'right'] as const).map((p) => (
-                    <button key={p} className={`td-settings-pill ${settings.toolbarPosition === p ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ toolbarPosition: p })}>{p}</button>
-                  ))}
-                </div>
-
-                <label className="td-settings-label">Opacity ({Math.round(settings.toolbarOpacity * 100)}%)</label>
-                <TipSlider min={5} max={100} value={Math.round(settings.toolbarOpacity * 100)} onChange={(v) => settings.update({ toolbarOpacity: v / 100 })} tooltip="Toolbar background transparency" />
-
-                <label className="td-settings-label">Border Radius ({settings.toolbarRadius}px)</label>
-                <TipSlider min={4} max={50} value={settings.toolbarRadius} onChange={(v) => settings.update({ toolbarRadius: v })} tooltip="Corner roundness of toolbar elements" />
-
-                <label className="td-settings-label">Blur ({settings.toolbarBlur}px)</label>
-                <TipSlider min={0} max={24} value={settings.toolbarBlur} onChange={(v) => settings.update({ toolbarBlur: v })} tooltip="Backdrop blur behind toolbar" />
-
-                <label className="td-settings-label">Saturation ({settings.toolbarSaturation}%)</label>
-                <TipSlider min={100} max={300} step={10} value={settings.toolbarSaturation} onChange={(v) => settings.update({ toolbarSaturation: v })} tooltip="Color vibrancy through toolbar glass" />
-
-                <label className="td-settings-label">Grain ({settings.toolbarGrain}%)</label>
-                <TipSlider min={0} max={100} step={5} value={settings.toolbarGrain} onChange={(v) => settings.update({ toolbarGrain: v })} tooltip="Noise texture on toolbar surfaces" />
-
-                <label className="td-settings-label">Color</label>
-                <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
-                  {['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#1e293b', '#111111'].map((c) => (
-                    <button
-                      key={c}
-                      className={`td-board-color-dot ${settings.toolbarColor === c ? 'is-selected' : ''}`}
-                      type="button"
-                      style={{ background: c || 'rgba(250,248,244,0.4)' }}
-                      title={c || 'Default'}
-                      onClick={() => settings.update({ toolbarColor: c })}
-                    />
-                  ))}
-                </div>
-
-                <label className="td-settings-label">Text Color</label>
-                <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
-                  {(['', '#ffffff', '#111111', '#f5f0e8', '#cccccc'] as const).map((c) => (
-                    <button
-                      key={c}
-                      className={`td-board-color-dot ${settings.toolbarTextColor === c ? 'is-selected' : ''}`}
-                      type="button"
-                      style={{ background: c || 'linear-gradient(135deg, #fff 50%, #111 50%)', border: !c ? '2px dashed rgba(0,0,0,0.2)' : undefined }}
-                      title={c || 'Auto'}
-                      onClick={() => settings.update({ toolbarTextColor: c })}
-                    />
-                  ))}
-                </div>
-
-                <div className="td-settings-divider" />
-
-                {/* ─── Widgets ─── */}
-                <label className="td-settings-section-title">Widgets</label>
-
-                <label className="td-settings-label">Opacity ({Math.round(settings.widgetOpacity * 100)}%)</label>
-                <TipSlider min={5} max={100} value={Math.round(settings.widgetOpacity * 100)} onChange={(v) => settings.update({ widgetOpacity: v / 100 })} tooltip="Widget background transparency" />
-
-                <label className="td-settings-label">Border Radius ({settings.widgetRadius}px)</label>
-                <TipSlider min={4} max={24} value={settings.widgetRadius} onChange={(v) => settings.update({ widgetRadius: v })} tooltip="Corner roundness of widgets" />
-
-                <label className="td-settings-label">Blur ({settings.widgetBlur}px)</label>
-                <TipSlider min={0} max={24} value={settings.widgetBlur} onChange={(v) => settings.update({ widgetBlur: v })} tooltip="Backdrop blur intensity behind widgets" />
-
-                <label className="td-settings-label">Saturation ({settings.widgetSaturation}%)</label>
-                <TipSlider min={100} max={300} step={10} value={settings.widgetSaturation} onChange={(v) => settings.update({ widgetSaturation: v })} tooltip="Color vibrancy of the wallpaper through widgets" />
-
-                <label className="td-settings-label">Grain ({settings.widgetGrain}%)</label>
-                <TipSlider min={0} max={100} step={5} value={settings.widgetGrain} onChange={(v) => settings.update({ widgetGrain: v })} tooltip="Film grain texture overlay on widgets" />
-
-                <label className="td-settings-label">Color</label>
-                <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
-                  {['', 'clear', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#111111'].map((c) => (
-                    <button
-                      key={c}
-                      className={`td-board-color-dot ${settings.widgetColor === c ? 'is-selected' : ''}`}
-                      type="button"
-                      style={{ background: c === 'clear' ? 'linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1))' : c || 'rgba(250,248,244,0.92)', border: c === 'clear' ? '2px dashed rgba(255,255,255,0.5)' : undefined }}
-                      title={c === 'clear' ? 'Clear glass' : c || 'Default'}
-                      onClick={() => settings.update({ widgetColor: c })}
-                    />
-                  ))}
-                </div>
-
-                <label className="td-settings-label">Text Color</label>
-                <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
-                  {(['', '#ffffff', '#111111', '#f5f0e8', '#cccccc'] as const).map((c) => (
-                    <button
-                      key={c}
-                      className={`td-board-color-dot ${settings.widgetTextColor === c ? 'is-selected' : ''}`}
-                      type="button"
-                      style={{ background: c || 'linear-gradient(135deg, #fff 50%, #111 50%)', border: !c ? '2px dashed rgba(0,0,0,0.2)' : undefined }}
-                      title={c || 'Auto'}
-                      onClick={() => settings.update({ widgetTextColor: c })}
-                    />
-                  ))}
-                </div>
-
-                <div className="td-settings-divider" />
-
-                {/* ─── Miscellaneous text ─── */}
-                <label className="td-settings-section-title">Misc. UI Text</label>
-                <p className="td-settings-hint" style={{ marginBottom: 6 }}>Text color for context menus, add-link form, and other overlays.</p>
-                <div className="td-board-color-picks" style={{ padding: '4px 0 6px' }}>
-                  {(['', '#222222', '#111111', '#444444', '#ffffff', '#f5f0e8'] as const).map((c) => (
-                    <button
-                      key={c}
-                      className={`td-board-color-dot ${settings.miscTextColor === c ? 'is-selected' : ''}`}
-                      type="button"
-                      style={{ background: c || 'linear-gradient(135deg, #fff 50%, #111 50%)', border: !c ? '2px dashed rgba(0,0,0,0.2)' : undefined }}
-                      title={c || 'Auto (dark)'}
-                      onClick={() => settings.update({ miscTextColor: c })}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-
-            {tab === 'behavior' && (
-              <>
-                {/* ─── Automation ─── */}
-                <label className="td-settings-section-title">Automation</label>
-
-                <label className="td-settings-label">Auto-close toolbar ({settings.autoCloseToolbar === 0 ? 'Off' : `${settings.autoCloseToolbar}s`})</label>
-                <TipSlider min={0} max={30} step={5} value={settings.autoCloseToolbar} onChange={(v) => settings.update({ autoCloseToolbar: v })} tooltip="Collapse toolbar after inactivity — 0 to disable" />
-
-                <label className="td-settings-label">Auto-lock layout ({settings.autoLock === 0 ? 'Off' : `${settings.autoLock}s`})</label>
-                <TipSlider min={0} max={60} step={10} value={settings.autoLock} onChange={(v) => settings.update({ autoLock: v })} tooltip="Lock board positions after inactivity — 0 to disable" />
-
-                <div className="td-settings-divider" />
-
-                {/* ─── Links ─── */}
-                <label className="td-settings-section-title">Links</label>
-
-                <label className="td-settings-label">Open links in</label>
-                <div className="td-settings-row">
-                  <button className={`td-settings-pill ${settings.openLinksNewTab ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ openLinksNewTab: true })}>New tab</button>
-                  <button className={`td-settings-pill ${!settings.openLinksNewTab ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ openLinksNewTab: false })}>Same tab</button>
-                </div>
-
-                <div className="td-settings-divider" />
-
-                {/* ─── Default Board Size ─── */}
-                <label className="td-settings-section-title">Default Board Size</label>
-
-                <label className="td-settings-label">Width ({settings.defaultBoardW * GRID_STEP}px)</label>
-                <TipSlider min={9} max={30} value={settings.defaultBoardW} onChange={(v) => settings.update({ defaultBoardW: v })} tooltip="Default width for new boards (100–360px)" />
-
-                <div className="td-settings-divider" />
-
-                {/* ─── Display Mode ─── */}
-                <label className="td-settings-section-title">Default Display Mode</label>
-
-                <div className="td-settings-row">
-                  {(['default', 'icons-vertical', 'icons-horizontal', 'icons-floating'] as const).map((m) => (
-                    <button key={m} className={`td-settings-pill ${settings.defaultDisplayMode === m ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ defaultDisplayMode: m })} style={{ fontSize: '8px' }}>
-                      {m === 'default' ? 'List' : m === 'icons-vertical' ? 'V-Icons' : m === 'icons-horizontal' ? 'H-Icons' : 'Float'}
-                    </button>
-                  ))}
-                </div>
-
-                <label className="td-settings-label">Icon Size ({settings.defaultIconSize}px)</label>
-                <div className="td-settings-row">
-                  {([12, 24, 36, 48] as const).map((sz) => (
-                    <button key={sz} className={`td-settings-pill ${settings.defaultIconSize === sz ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ defaultIconSize: sz })}>
-                      {sz}
-                    </button>
-                  ))}
-                </div>
-
-                <button className={`td-link-context-item ${settings.defaultShowSections ? 'is-active' : ''}`} type="button" onClick={() => settings.update({ defaultShowSections: !settings.defaultShowSections })} style={{ marginBottom: 8 }}>
-                  <span>Show sections (dividers)</span>
-                </button>
-              </>
-            )}
-
-            {tab === 'data' && (
-              <>
-                <label className="td-settings-label">Storage used</label>
-                <div className="td-settings-value">{storageUsage}</div>
-                <button className="td-settings-action" type="button" onClick={onResetOnboarding}>Re-run onboarding tour</button>
-
-                <div className="td-settings-divider" />
-
-                <label className="td-settings-section-title">Starter Template</label>
-                <p className="td-settings-hint">Load a demo template with 4 boards (Dev, Social, Design, Productivity) to explore Frontly features.</p>
-                <button
-                  className="td-settings-action"
-                  type="button"
-                  onClick={() => {
-                    const ws = useWorkspaceStore.getState().getActiveWorkspace();
-                    if (!ws) return;
-                    const boards = getStarterTemplateBoards();
-                    boards.forEach((board) => {
-                      useWorkspaceStore.getState().importBoard(ws.id, board);
-                    });
-                    // Download the JSON file
-                    const json = getStarterTemplateJSON();
-                    const blob = new Blob([json], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'frontly-starter-template.json';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  Load Starter Template
-                </button>
-
-                <div className="td-settings-divider" />
-
-                {!confirmReset ? (
-                  <button className="td-settings-action td-settings-danger" type="button" onClick={handleClearAll}>
-                    Factory reset
-                  </button>
-                ) : (
-                  <div className="f-reset-confirm">
-                    <div className="f-reset-warning">
-                      <AlertTriangle size={14} strokeWidth={2} />
-                      <span>This permanently removes all Frontly data.</span>
+              {/* ═══ ABOUT ═══ */}
+              {tab === 'about' && (
+                <>
+                  <SectionCard title="Frontly">
+                    <div className="f-setting-row"><span className="f-setting-label">Version</span><span className="f-setting-value-text">v1.2.0</span></div>
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">GitHub</span>
+                      <a className="f-settings-link" href="https://github.com/bhavishyeah/Frontly" target="_blank" rel="noreferrer">bhavishyeah/Frontly</a>
                     </div>
-                    <div className="f-reset-actions">
-                      <button className="f-reset-cancel" type="button" onClick={() => setConfirmReset(false)}>Cancel</button>
-                      <button className="f-reset-delete" type="button" onClick={handleClearAll}>Delete everything</button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+                  </SectionCard>
 
-            {tab === 'info' && (
-              <>
-                <div className="td-settings-info-row"><span>Version</span><span>Frontly v1.2.0</span></div>
-                <div className="td-settings-info-row"><span>GitHub</span><a href="https://github.com/bhavishyeah/Frontly" target="_blank" rel="noreferrer">bhavishyeah/Frontly</a></div>
-                <label className="td-settings-label" style={{ marginTop: 12 }}>Keyboard Shortcuts</label>
-                <div className="td-settings-shortcuts">
-                  {SHORTCUTS.map((s) => (
-                    <div key={s.keys} className="td-settings-shortcut-row"><kbd className="td-settings-kbd">{s.keys}</kbd><span>{s.action}</span></div>
-                  ))}
-                </div>
-              </>
-            )}
+                  <SectionCard title="Keyboard Shortcuts">
+                    <div className="f-shortcuts-grid">
+                      {SHORTCUTS.map((s) => (
+                        <div key={s.keys} className="f-shortcut-row">
+                          <kbd className="f-kbd">{s.keys}</kbd>
+                          <span className="f-shortcut-label">{s.action}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </SectionCard>
+                </>
+              )}
+
+            </div>
           </div>
         </div>
       )}
