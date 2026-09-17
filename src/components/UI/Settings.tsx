@@ -539,7 +539,7 @@ export function SettingsButton({ onResetOnboarding }: Props) {
               {tab === 'about' && (
                 <>
                   <SectionCard title="Frontly">
-                    <div className="f-setting-row"><span className="f-setting-label">Version</span><span className="f-setting-value-text">v1.2.0</span></div>
+                    <div className="f-setting-row"><span className="f-setting-label">Version</span><span className="f-setting-value-text">v1.3.0</span></div>
                     <div className="f-setting-row">
                       <span className="f-setting-label">GitHub</span>
                       <a className="f-settings-link" href="https://github.com/bhavishyeah/Frontly" target="_blank" rel="noreferrer">bhavishyeah/Frontly</a>

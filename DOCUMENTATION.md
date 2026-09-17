@@ -338,7 +338,7 @@ src/
 |---|---|
 | v1.0.0 | Initial release — basic boards, toolbar |
 | v1.1.0 | Frontly rebrand; 12px grid; icon display modes; live wallpapers; widget settings; note/todo redesign; context menu clamping; full type-safety cleanup |
-| v1.2.0 | Text color settings per section; add-link form inherits board style; icon strip fixes; localStorage migration; background.ts migration; live wallpaper wiring; documentation rewrite |
+| v1.3.0 | Modern settings panel redesign with sidebar sub-navigation; board position stability fix; grid layout stability improvements |
 
 ---
 
