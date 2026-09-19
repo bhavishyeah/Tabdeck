@@ -47,7 +47,7 @@ Board heights are always derived from content — you can't manually resize link
 ## Board Types
 
 ### Link Boards
-The default board type. Each link occupies one 24px row (favicon + title). Boards auto-resize as you add or remove links.
+The default board type. Each link occupies one 24px row (favicon     + title). Boards auto-resize as you add or remove links.
 
 **Display modes** (right-click → Display):
 | Mode | Description |
@@ -339,6 +339,7 @@ src/
 | v1.0.0 | Initial release — basic boards, toolbar |
 | v1.1.0 | Frontly rebrand; 12px grid; icon display modes; live wallpapers; widget settings; note/todo redesign; context menu clamping; full type-safety cleanup |
 | v1.3.0 | Modern settings panel redesign with sidebar sub-navigation; board position stability fix; grid layout stability improvements |
+| v1.4.0 | Theme presets (6 one-click looks); per-widget config (clock 12/24h, seconds, date, timezone; weather °C/°F + manual location; todo clear-completed) via a portaled, viewport-clamped gear popover; settings sync across signed-in Chrome via chrome.storage.sync; opt-in board/workspace sync with chunking + quota guard; Chrome sign-in detection with in-panel hint; borderless widgets; font-size slider now scales widget/UI text |
 
 ---
 

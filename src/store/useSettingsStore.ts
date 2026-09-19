@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { GRID_STEP } from '../lib/useGridDimensions';
+import { pushSettings } from '../lib/settingsSync';
 
 export interface AppSettings {
   fontFamily: string;
@@ -46,6 +47,8 @@ export interface AppSettings {
   defaultDisplayMode: import('../lib/workspaceTypes').BoardDisplayMode;
   defaultIconSize: import('../lib/workspaceTypes').IconSize;
   defaultShowSections: boolean;
+  /** Opt-in: sync workspaces/boards across devices via chrome.storage.sync (default off). */
+  syncBoards: boolean;
 }
 
 const STORAGE_KEY = 'frontly-settings';
@@ -88,6 +91,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultDisplayMode: 'default',
   defaultIconSize: 12,
   defaultShowSections: false,
+  syncBoards: false,
 };
 
 function loadFromStorage(): AppSettings {
@@ -120,7 +124,22 @@ function loadFromStorage(): AppSettings {
 }
 
 interface SettingsState extends AppSettings {
+  /** Update settings locally, persist, and push to sync. */
   update: (partial: Partial<AppSettings>) => void;
+  /**
+   * Apply settings received from another device. Persists to localStorage
+   * but does NOT push back to sync (the timestamp is managed by the sync
+   * layer), avoiding a push/pull echo loop.
+   */
+  hydrateFromSync: (settings: AppSettings) => void;
+}
+
+/** Strip store methods so only AppSettings fields are serialised. */
+function extractSettings(state: SettingsState): AppSettings {
+  const rest = Object.fromEntries(
+    Object.entries(state).filter(([k]) => k !== 'update' && k !== 'hydrateFromSync')
+  );
+  return rest as unknown as AppSettings;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -128,11 +147,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   update: (partial) => {
     set(partial);
-    const state = { ...get(), ...partial };
-    // Omit the 'update' function before serialising to localStorage
-    const toSave = Object.fromEntries(
-      Object.entries(state).filter(([k]) => k !== 'update')
-    );
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    const settings = extractSettings(get());
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    pushSettings(settings);
+  },
+
+  hydrateFromSync: (settings) => {
+    // Merge over defaults so a payload from an older/newer version is safe.
+    const merged: AppSettings = { ...DEFAULT_SETTINGS, ...settings };
+    set(merged);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
   },
 }));

@@ -1,22 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import RGL from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { CheckSquare, Clock as ClockIcon, CloudSun, LayoutGrid, Plus, Search, StickyNote } from 'lucide-react';
+import { CheckSquare, Clock as ClockIcon, CloudSun, LayoutGrid, Plus, Search, StickyNote, LayoutTemplate, Bookmark } from 'lucide-react';
+import { getStarterTemplateBoards } from '../lib/starterTemplate';
 import { Board } from '../components/Board/Board';
 import { Toolbar } from '../components/UI/Toolbar';
 import { Toast } from '../components/UI/Toast';
 import { Onboarding } from '../components/UI/Onboarding';
+import { CommandPalette } from '../components/UI/CommandPalette';
 import { SettingsButton, applyFontCSS, applyGlassCSS } from '../components/UI/Settings';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { pullSettings, subscribeSettings, getLocalTs, setLocalTs } from '../lib/settingsSync';
+import { pushBoards, pullBoards, subscribeBoards, getBoardTs, setBoardTs, mergeWithLocalWallpapers } from '../lib/boardSync';
 import { WorkspaceTabs } from '../components/UI/WorkspaceTabs';
 import { importBookmarkFolder, MAX_BOARDS_PER_WORKSPACE } from '../lib/bookmarkImport';
 import { storeVideoBlob, deleteVideoBlob, getVideoBlob } from '../lib/videoStorage';
@@ -24,6 +30,8 @@ import { pushState, undo, redo } from '../lib/undoManager';
 import { useUiStore } from '../store/useUiStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 import { useGridDimensions, GRID_STEP, ROWS_PER_LINK } from '../lib/useGridDimensions';
+import { getFaviconUrl } from '../lib/favicon';
+import type { LinkItem } from '../lib/workspaceTypes';
 import '../styles/global.css';
 
 // Old grid system constants for migration
@@ -320,11 +328,95 @@ export function NewTab() {
   });
   const [toolbarOpen, setToolbarOpen] = useState(true);
   const [widgetsOpen, setWidgetsOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const commandOpenRef = useRef(false);
+  const [activeDragLink, setActiveDragLink] = useState<LinkItem | null>(null);
   const appSettings = useSettingsStore();
   const grid = useGridDimensions();
 
   // Run chrome.storage migration once on mount (localStorage migration is synchronous at module level)
   useEffect(() => { migrateTabdeckKeys(); }, []);
+
+  // Settings sync (phase A): pull newer settings from chrome.storage.sync on
+  // mount, then stay in step with other signed-in desktop Chrome instances.
+  useEffect(() => {
+    let active = true;
+    pullSettings().then((remote) => {
+      if (!active || !remote) return;
+      // Apply only if the remote copy is newer than what this device last applied.
+      if (remote._ts > getLocalTs()) {
+        setLocalTs(remote._ts);
+        useSettingsStore.getState().hydrateFromSync(remote.settings);
+      }
+    });
+
+    const unsubscribe = subscribeSettings((settings) => {
+      useSettingsStore.getState().hydrateFromSync(settings);
+    });
+
+    return () => { active = false; unsubscribe(); };
+  }, []);
+
+  // Board sync (phase B): opt-in via appSettings.syncBoards. When enabled:
+  //  - pull newer board data from sync on mount / when toggled on,
+  //  - push local changes (debounced) so other devices converge,
+  //  - apply remote changes live, preserving this device's local wallpapers.
+  useEffect(() => {
+    if (!appSettings.syncBoards) return;
+    let active = true;
+
+    // Guards against the pull→replaceAll→subscribe→push echo: while we are
+    // applying data received from another device, suppress the outgoing push.
+    let applyingRemote = false;
+
+    const applyRemote = async () => {
+      const remote = await pullBoards();
+      if (!active || !remote) return;
+      if (remote._ts > getBoardTs()) {
+        setBoardTs(remote._ts);
+        const local = useWorkspaceStore.getState().workspaces;
+        const merged = mergeWithLocalWallpapers(remote.data.workspaces, local);
+        applyingRemote = true;
+        useWorkspaceStore.getState().replaceAll(merged, remote.data.activeWorkspaceId);
+        // Release the guard after the synchronous subscribers have run.
+        setTimeout(() => { applyingRemote = false; }, 0);
+      }
+    };
+
+    // Initial pull
+    applyRemote();
+
+    // Live remote updates
+    const unsubRemote = subscribeBoards(() => { applyRemote(); });
+
+    // Debounced push on local changes
+    let pushTimer: ReturnType<typeof setTimeout> | null = null;
+    let warnedTooLarge = false;
+    const unsubLocal = useWorkspaceStore.subscribe((state) => {
+      if (applyingRemote) return; // change came from a remote pull — don't echo it back
+      if (pushTimer) clearTimeout(pushTimer);
+      pushTimer = setTimeout(async () => {
+        const result = await pushBoards(state.workspaces, state.activeWorkspaceId);
+        if (result.ok) {
+          warnedTooLarge = false;
+        } else if (result.reason === 'too-large' && !warnedTooLarge) {
+          warnedTooLarge = true; // warn once per size overflow, not on every edit
+          showToast('Boards too large to sync — kept on this device only', 'error');
+        }
+      }, 1200);
+    });
+
+    return () => {
+      active = false;
+      if (pushTimer) clearTimeout(pushTimer);
+      unsubRemote();
+      unsubLocal();
+    };
+  }, [appSettings.syncBoards]);
+
+  // Mirror commandOpen into a ref so the global keyboard handler (empty-dep effect)
+  // can read the latest value without re-subscribing.
+  useEffect(() => { commandOpenRef.current = commandOpen; }, [commandOpen]);
 
   // Apply all CSS settings on mount and whenever they change
   useEffect(() => {
@@ -388,6 +480,17 @@ export function NewTab() {
       const ctrl = e.ctrlKey || e.metaKey;
       const alt = e.altKey;
 
+      // While the command palette is open, let it own the keyboard.
+      // Only Ctrl+K (toggle/close) and Escape reach here; everything else is
+      // handled inside the palette and must not mutate the workspace behind it.
+      if (commandOpenRef.current) {
+        if (ctrl && !alt && !e.shiftKey && e.code === 'KeyK') {
+          e.preventDefault();
+          setCommandOpen(false);
+        }
+        return;
+      }
+
       // Prevent zoom
       if (ctrl && !alt && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
         e.preventDefault();
@@ -418,6 +521,12 @@ export function NewTab() {
       if (ctrl && !alt && e.code === 'KeyM') {
         e.preventDefault();
         setToolbarOpen((v) => !v);
+      }
+
+      // Ctrl+K — command palette
+      if (ctrl && !alt && !e.shiftKey && e.code === 'KeyK') {
+        e.preventDefault();
+        setCommandOpen((v) => !v);
       }
 
       // Alt shortcuts (work regardless of toolbar state)
@@ -583,7 +692,16 @@ export function NewTab() {
     )?.id;
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const id = String(event.active.id);
+    const link = activeWorkspace?.boards
+      .flatMap((b) => b.links)
+      .find((l) => l.id === id);
+    setActiveDragLink(link ?? null);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragLink(null);
     if (!activeWorkspace) return;
 
     const { active, over } = event;
@@ -875,6 +993,90 @@ const handleImportBookmarks = async (folderId?: string) => {
 
         const parsed = JSON.parse(result) as Record<string, unknown>;
 
+        // ── Single-workspace file (exported via right-click "Export workspace") ──
+        // Shape: a bare WorkspaceItem { id, name, boards: [...] } at top level.
+        const looksLikeWorkspace =
+          typeof parsed.id === 'string' &&
+          typeof parsed.name === 'string' &&
+          Array.isArray((parsed as Record<string, unknown>).boards);
+
+        if (looksLikeWorkspace) {
+          const ws = parsed as unknown as import('../lib/workspaceTypes').WorkspaceItem;
+          // Give it a fresh id so it never collides with an existing workspace,
+          // then merge it into the current set and switch to it.
+          const freshId = crypto.randomUUID();
+          const merged: import('../lib/workspaceTypes').WorkspaceItem = {
+            ...ws,
+            id: freshId,
+            wallpaper: ws.wallpaper ?? null,
+            videoWallpaper: null, // video blobs live in IndexedDB, not portable via JSON
+            liveWallpaper: ws.liveWallpaper ?? null,
+            // Remap all board + link ids so re-importing the same file never
+            // creates duplicate ids across workspaces (breaks transfer/undo/drag).
+            boards: (Array.isArray(ws.boards) ? ws.boards : []).map((b) => ({
+              ...b,
+              id: crypto.randomUUID(),
+              links: (b.links || []).map((l) => ({ ...l, id: crypto.randomUUID() })),
+            })),
+            createdAt: ws.createdAt ?? Date.now(),
+            updatedAt: Date.now(),
+          };
+          useWorkspaceStore.setState((s) => ({
+            workspaces: [...s.workspaces, merged],
+            activeWorkspaceId: freshId,
+          }));
+          showToast(`Imported workspace "${merged.name}"`, 'success');
+          return;
+        }
+
+        // ── Full backup file — ask merge vs replace ──
+        const existingBackup = parsed[WORKSPACE_STORE_KEY];
+        if (existingBackup) {
+          const replace = confirm(
+            'Import backup:\n\nOK = REPLACE everything with this backup.\nCancel = MERGE its workspaces into your current setup.'
+          );
+          if (!replace) {
+            // Merge: parse the incoming store's workspaces and append them
+            try {
+              const incoming = typeof existingBackup === 'string'
+                ? JSON.parse(existingBackup)
+                : existingBackup;
+              const incomingWs = incoming?.state?.workspaces;
+              if (Array.isArray(incomingWs) && incomingWs.length > 0) {
+                const remapped = incomingWs.map((w: import('../lib/workspaceTypes').WorkspaceItem) => ({
+                  ...w,
+                  id: crypto.randomUUID(),
+                  videoWallpaper: null, // video blobs are not carried in a JSON backup
+                  boards: (w.boards || []).map((b) => ({
+                    ...b,
+                    id: crypto.randomUUID(),
+                    links: (b.links || []).map((l) => ({ ...l, id: crypto.randomUUID() })),
+                  })),
+                  updatedAt: Date.now(),
+                }));
+                const hadVideo = incomingWs.some((w: import('../lib/workspaceTypes').WorkspaceItem) => !!w.videoWallpaper);
+                useWorkspaceStore.setState((s) => ({
+                  workspaces: [...s.workspaces, ...remapped],
+                  activeWorkspaceId: remapped[0].id,
+                }));
+                showToast(
+                  hadVideo
+                    ? `Merged ${remapped.length} workspace(s) (video wallpapers not included)`
+                    : `Merged ${remapped.length} workspace(s)`,
+                  'success'
+                );
+                return;
+              }
+            } catch {
+              showToast('Invalid backup file', 'error');
+              return;
+            }
+            showToast('No workspaces found to merge', 'error');
+            return;
+          }
+          // replace === true → fall through to full-storage overwrite below
+        }
+
         const alreadyNewStore = parsed[WORKSPACE_STORE_KEY];
         const legacyBoardStore = normalizeImportedBoardStore(
           parsed[LEGACY_BOARD_STORE_KEY]
@@ -1075,6 +1277,8 @@ const handleImportBookmarks = async (folderId?: string) => {
         />
       )}
 
+      <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
+
       <div className="td-topbar" style={{ justifyContent: appSettings.toolbarPosition === 'center' ? 'center' : appSettings.toolbarPosition === 'right' ? 'flex-end' : 'flex-start' }}>
         {/* Logo toggle button — always visible */}
         <button
@@ -1241,19 +1445,59 @@ const handleImportBookmarks = async (folderId?: string) => {
 
       {activeWorkspace.boards.length === 0 ? (
         <div className="td-empty-home">
-          <button
-            className="td-create-first"
-            type="button"
-            onClick={() => addBoard(activeWorkspace.id)}
-          >
-            Create first board
-          </button>
+          <div className="f-empty-card">
+            <div className="f-empty-logo">
+              <img src="/icons/icon128.png" alt="Frontly" />
+            </div>
+            <h2 className="f-empty-title">This workspace is empty</h2>
+            <p className="f-empty-sub">Add a board, start from a template, or bring in your existing backup.</p>
+
+            <div className="f-empty-actions">
+              <button
+                className="f-empty-action f-empty-action--primary"
+                type="button"
+                onClick={() => addBoard(activeWorkspace.id)}
+              >
+                <Plus size={16} strokeWidth={2.4} />
+                <span>Add a board</span>
+              </button>
+
+              <button
+                className="f-empty-action"
+                type="button"
+                onClick={() => {
+                  // getStarterTemplateBoards() mints fresh ids on every call,
+                  // so loading it repeatedly never duplicates ids.
+                  getStarterTemplateBoards().forEach((b) => importBoard(activeWorkspace.id, b));
+                  showToast('Starter template loaded', 'success');
+                }}
+              >
+                <LayoutTemplate size={16} strokeWidth={2.2} />
+                <span>Load starter template</span>
+              </button>
+
+              <button
+                className="f-empty-action"
+                type="button"
+                onClick={() =>
+                  (document.querySelector('input[accept="application/json"]') as HTMLInputElement)?.click()
+                }
+              >
+                <Bookmark size={16} strokeWidth={2.2} />
+                <span>Import a backup</span>
+              </button>
+            </div>
+
+            <p className="f-empty-hint">Tip: press <kbd>Ctrl</kbd>+<kbd>K</kbd> to search, or open the toolbar menu to import browser bookmarks.</p>
+          </div>
         </div>
       ) : (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveDragLink(null)}
         >
           <RGL
             className="td-board-grid"
@@ -1286,6 +1530,20 @@ const handleImportBookmarks = async (folderId?: string) => {
               </div>
             ))}
           </RGL>
+
+          <DragOverlay dropAnimation={null}>
+            {activeDragLink ? (
+              <div className="f-drag-chip">
+                <img
+                  className="f-drag-chip-icon"
+                  src={activeDragLink.favicon?.trim() || getFaviconUrl(activeDragLink.url, 32)}
+                  alt=""
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                />
+                <span className="f-drag-chip-title">{activeDragLink.title}</span>
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
 

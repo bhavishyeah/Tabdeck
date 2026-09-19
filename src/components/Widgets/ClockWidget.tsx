@@ -1,11 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ClockConfig } from '../../lib/workspaceTypes';
 
-export function ClockWidget() {
+interface Props {
+  config?: ClockConfig;
+}
+
+export function ClockWidget({ config }: Props) {
   const [now, setNow] = useState(new Date());
   const [compact, setCompact] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Update every second for smooth minute transitions
+  const hour24 = config?.hour24 ?? false;
+  const showSeconds = config?.showSeconds ?? false;
+  const showDate = config?.showDate ?? true;
+  const timezone = config?.timezone?.trim() || undefined;
+
+  // Update every second (needed for the seconds display; harmless otherwise)
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
@@ -16,32 +26,61 @@ export function ClockWidget() {
     if (!containerRef.current) return;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (entry) {
-        setCompact(entry.contentRect.height < 100);
-      }
+      if (entry) setCompact(entry.contentRect.height < 100);
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
 
-  // Format time (12-hour without seconds for clean display)
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const isPM = hours >= 12;
-  const h12 = hours % 12 || 12;
-  const timeStr = `${h12}:${minutes.toString().padStart(2, '0')}`;
-  const period = isPM ? 'PM' : 'AM';
+  // Build time/date parts honoring the configured timezone.
+  // Intl handles the timezone conversion; we read parts to compose the layout.
+  const timeOpts: Intl.DateTimeFormatOptions = {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: !hour24,
+    ...(showSeconds ? { second: '2-digit' } : {}),
+    ...(timezone ? { timeZone: timezone } : {}),
+  };
 
-  // Format date
-  const weekday = now.toLocaleDateString([], { weekday: 'long' });
-  const month = now.toLocaleDateString([], { month: 'short' });
-  const day = now.getDate();
+  const { timeStr, period } = (() => {
+    try {
+      const parts = new Intl.DateTimeFormat([], timeOpts).formatToParts(now);
+      const per = (parts.find((p) => p.type === 'dayPeriod')?.value ?? '').toUpperCase();
+      // Everything except the AM/PM token forms the time text (hour:minute[:second])
+      const t = parts
+        .filter((p) => p.type !== 'dayPeriod')
+        .map((p) => p.value)
+        .join('')
+        .trim();
+      return { timeStr: t, period: per };
+    } catch {
+      // Invalid timezone → fall back to local formatting
+      return { timeStr: new Intl.DateTimeFormat([], { ...timeOpts, timeZone: undefined }).format(now), period: '' };
+    }
+  })();
+
+  let dateStr = '';
+  if (showDate) {
+    try {
+      const dateOpts: Intl.DateTimeFormatOptions = {
+        weekday: 'long', month: 'short', day: 'numeric',
+        ...(timezone ? { timeZone: timezone } : {}),
+      };
+      const parts = new Intl.DateTimeFormat([], dateOpts).formatToParts(now);
+      const weekday = parts.find((p) => p.type === 'weekday')?.value ?? '';
+      const month = parts.find((p) => p.type === 'month')?.value ?? '';
+      const day = parts.find((p) => p.type === 'day')?.value ?? '';
+      dateStr = `${weekday} · ${month} ${day}`;
+    } catch {
+      dateStr = now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+  }
 
   if (compact) {
     return (
       <div ref={containerRef} className="f-clock">
         <span className="f-clock-time">{timeStr}</span>
-        <span className="f-clock-period">{period}</span>
+        {period && <span className="f-clock-period">{period}</span>}
       </div>
     );
   }
@@ -50,11 +89,9 @@ export function ClockWidget() {
     <div ref={containerRef} className="f-clock">
       <div className="f-clock-main">
         <span className="f-clock-time">{timeStr}</span>
-        <span className="f-clock-period">{period}</span>
+        {period && <span className="f-clock-period">{period}</span>}
       </div>
-      <div className="f-clock-date">
-        {weekday} · {month} {day}
-      </div>
+      {showDate && <div className="f-clock-date">{dateStr}</div>}
     </div>
   );
 }

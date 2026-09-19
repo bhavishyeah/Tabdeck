@@ -7,6 +7,9 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { getStarterTemplateBoards, getStarterTemplateJSON } from '../../lib/starterTemplate';
 import { GRID_STEP } from '../../lib/useGridDimensions';
+import { THEMES } from '../../lib/themes';
+import { clearBoardSync } from '../../lib/boardSync';
+import { getChromeAccountStatus } from '../../lib/settingsSync';
 
 const FONTS = [
   { name: 'Montserrat', value: "'Montserrat', sans-serif" },
@@ -136,6 +139,9 @@ export function applyFontCSS(fontFamily: string, fontSize: number) {
   const font = FONTS.find((f) => f.name === fontFamily);
   if (font) document.documentElement.style.setProperty('--td-font', font.value);
   document.documentElement.style.setProperty('--td-font-size', `${fontSize}px`);
+  // Drive the widget/UI type scale from the font-size slider. Baseline 10px = 1.0,
+  // so the slider (8–14px) also scales widget text (clock, weather, todo, etc.).
+  document.documentElement.style.setProperty('--f-scale', `${fontSize / 10}`);
   if (fontFamily !== 'Montserrat') {
     const url = FONT_URLS[fontFamily];
     if (url && !document.querySelector(`link[href="${url}"]`)) {
@@ -174,12 +180,13 @@ export function applyGlassCSS(blur: number, saturation: number, _tint?: number, 
 }
 
 type Tab = 'appearance' | 'layout' | 'behavior' | 'data' | 'about';
-type AppearanceSub = 'typography' | 'boards' | 'toolbar' | 'widgets' | 'ui-text';
+type AppearanceSub = 'themes' | 'typography' | 'boards' | 'toolbar' | 'widgets' | 'ui-text';
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode; subs?: { id: AppearanceSub; label: string }[] }[] = [
   {
     id: 'appearance', label: 'Appearance', icon: <Palette size={15} strokeWidth={2} />,
     subs: [
+      { id: 'themes',     label: 'Themes' },
       { id: 'typography', label: 'Typography' },
       { id: 'boards',     label: 'Boards' },
       { id: 'toolbar',    label: 'Toolbar' },
@@ -198,9 +205,10 @@ interface Props { onResetOnboarding: () => void; }
 export function SettingsButton({ onResetOnboarding }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('appearance');
-  const [appearanceSub, setAppearanceSub] = useState<AppearanceSub>('typography');
+  const [appearanceSub, setAppearanceSub] = useState<AppearanceSub>('themes');
   const [storageUsage, setStorageUsage] = useState('...');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [accountStatus, setAccountStatus] = useState<'signed-in' | 'signed-out' | 'unsupported' | 'unknown'>('unknown');
   const panelRef = useRef<HTMLDivElement>(null);
   const settings = useSettingsStore();
 
@@ -233,6 +241,13 @@ export function SettingsButton({ onResetOnboarding }: Props) {
       chrome.storage.local.getBytesInUse(null, (bytes) => {
         setStorageUsage(bytes > 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`);
       });
+    }
+  }, [open, tab]);
+
+  // Check Chrome sign-in status when the Behavior tab (which hosts Sync) opens.
+  useEffect(() => {
+    if (open && tab === 'behavior') {
+      getChromeAccountStatus().then(setAccountStatus);
     }
   }, [open, tab]);
 
@@ -307,6 +322,29 @@ export function SettingsButton({ onResetOnboarding }: Props) {
               {/* ═══ APPEARANCE ═══ */}
               {tab === 'appearance' && (
                 <>
+                  {/* ── Themes ── */}
+                  {appearanceSub === 'themes' && (
+                    <SectionCard title="Theme Presets">
+                      <div className="f-settings-hint-text">One click sets board, widget, and toolbar looks. Fine-tune afterwards in the other tabs.</div>
+                      <div className="f-theme-grid">
+                        {THEMES.map((theme) => (
+                          <button
+                            key={theme.id}
+                            type="button"
+                            className="f-theme-card"
+                            onClick={() => settings.update({ ...theme.settings })}
+                          >
+                            <span
+                              className="f-theme-swatch"
+                              style={{ background: `linear-gradient(135deg, ${theme.preview[0]} 55%, ${theme.preview[1]} 55%)` }}
+                            />
+                            <span className="f-theme-name">{theme.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  )}
+
                   {/* ── Typography ── */}
                   {appearanceSub === 'typography' && (
                     <SectionCard title="Font Family">
@@ -484,6 +522,39 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                       </div>
                     </div>
                   </SectionCard>
+
+                  <SectionCard title="Sync">
+                    <p className="f-settings-hint-text">Settings sync automatically across signed-in Chrome on your PCs.</p>
+
+                    {accountStatus === 'signed-out' && (
+                      <div className="f-sync-notice">
+                        <AlertTriangle size={13} strokeWidth={2} />
+                        <span>Sign in to Chrome (top-right avatar) and turn on Chrome Sync to sync across devices. Until then, data stays on this PC.</span>
+                      </div>
+                    )}
+                    {accountStatus === 'signed-in' && (
+                      <div className="f-sync-notice f-sync-notice--ok">
+                        <span>Signed in to Chrome — sync is active across your PCs.</span>
+                      </div>
+                    )}
+
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Sync boards &amp; workspaces</span>
+                      <button
+                        type="button"
+                        className={`f-toggle ${settings.syncBoards ? 'is-on' : ''}`}
+                        onClick={() => {
+                          const next = !settings.syncBoards;
+                          settings.update({ syncBoards: next });
+                          if (!next) { void clearBoardSync(); }
+                        }}
+                        aria-label="Toggle board sync"
+                      >
+                        <span className="f-toggle-knob" />
+                      </button>
+                    </div>
+                    <p className="f-settings-hint-text">Wallpapers and videos stay on this device. Very large board sets may not fit and will stay local.</p>
+                  </SectionCard>
                 </>
               )}
 
@@ -539,7 +610,7 @@ export function SettingsButton({ onResetOnboarding }: Props) {
               {tab === 'about' && (
                 <>
                   <SectionCard title="Frontly">
-                    <div className="f-setting-row"><span className="f-setting-label">Version</span><span className="f-setting-value-text">v1.3.0</span></div>
+                    <div className="f-setting-row"><span className="f-setting-label">Version</span><span className="f-setting-value-text">v1.4.0</span></div>
                     <div className="f-setting-row">
                       <span className="f-setting-label">GitHub</span>
                       <a className="f-settings-link" href="https://github.com/bhavishyeah/Frontly" target="_blank" rel="noreferrer">bhavishyeah/Frontly</a>

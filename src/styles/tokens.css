@@ -35,33 +35,37 @@
   /* ─── Typography ─── */
   --f-font: 'Montserrat', sans-serif;
 
+  /* Type scale multiplier — driven by the font-size slider (baseline 10px = 1.0).
+     Every size token below multiplies by this so the slider scales widget/UI text. */
+  --f-scale: 1;
+
   /* Display — hero values (clock time, big numbers) */
-  --f-display-size: 36px;
+  --f-display-size: calc(36px * var(--f-scale));
   --f-display-weight: 700;
   --f-display-leading: 1.1;
 
   /* Widget Value — secondary emphasis (temp, counts) */
-  --f-value-size: 22px;
+  --f-value-size: calc(22px * var(--f-scale));
   --f-value-weight: 600;
   --f-value-leading: 1.2;
 
   /* Widget Title — section headers */
-  --f-title-size: 13px;
+  --f-title-size: calc(13px * var(--f-scale));
   --f-title-weight: 600;
   --f-title-leading: 1.3;
 
   /* Body — default content */
-  --f-body-size: 13px;
+  --f-body-size: calc(13px * var(--f-scale));
   --f-body-weight: 400;
   --f-body-leading: 1.5;
 
   /* Secondary — supporting info */
-  --f-secondary-size: 11px;
+  --f-secondary-size: calc(11px * var(--f-scale));
   --f-secondary-weight: 400;
   --f-secondary-leading: 1.4;
 
   /* Micro — labels, badges, hints */
-  --f-micro-size: 10px;
+  --f-micro-size: calc(10px * var(--f-scale));
   --f-micro-weight: 500;
   --f-micro-leading: 1.3;
 

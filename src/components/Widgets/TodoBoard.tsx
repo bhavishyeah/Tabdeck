@@ -28,6 +28,12 @@ export function TodoBoardContent({ todos, onChange }: Props) {
     onChange(todos.filter((t) => t.id !== id));
   };
 
+  const clearCompleted = () => {
+    onChange(todos.filter((t) => !t.done));
+  };
+
+  const completedCount = todos.filter((t) => t.done).length;
+
   return (
     <div className="td-todo-content">
       <div className="td-todo-list">
@@ -68,6 +74,12 @@ export function TodoBoardContent({ todos, onChange }: Props) {
           placeholder={todos.length === 0 ? 'Type a task...' : '+ Add task'}
         />
       </div>
+
+      {completedCount > 0 && (
+        <button type="button" className="f-todo-clear" onClick={clearCompleted}>
+          Clear completed ({completedCount})
+        </button>
+      )}
     </div>
   );
 }

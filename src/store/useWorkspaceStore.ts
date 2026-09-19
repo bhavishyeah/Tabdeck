@@ -82,10 +82,14 @@ interface WorkspaceState {
   setBoardDisplayMode: (workspaceId: string, boardId: string, mode: BoardDisplayMode) => void;
   setBoardIconSize: (workspaceId: string, boardId: string, size: IconSize) => void;
   setBoardSections: (workspaceId: string, boardId: string, show: boolean) => void;
+  setClockConfig: (workspaceId: string, boardId: string, config: import('../lib/workspaceTypes').ClockConfig) => void;
+  setWeatherConfig: (workspaceId: string, boardId: string, config: import('../lib/workspaceTypes').WeatherConfig) => void;
   removeBoard: (workspaceId: string, boardId: string) => void;
   transferBoard: (fromWorkspaceId: string, toWorkspaceId: string, boardId: string) => void;
   updateBoardLayouts: (workspaceId: string, layouts: { id: string; x: number; y: number; w: number; h: number }[]) => void;
   importBoard: (workspaceId: string, board: BoardItem) => void;
+  /** Replace all workspaces (used to apply data pulled from cross-device sync). */
+  replaceAll: (workspaces: WorkspaceItem[], activeWorkspaceId: string) => void;
   addLink: (workspaceId: string, boardId: string, title: string, url: string) => void;
   renameLink: (workspaceId: string, boardId: string, linkId: string, title: string) => void;
   transferLink: (fromWorkspaceId: string, fromBoardId: string, linkId: string, toWorkspaceId: string, toBoardId: string) => void;
@@ -368,6 +372,40 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           ),
         })),
 
+      setClockConfig: (workspaceId, boardId, config) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, clockConfig: { ...board.clockConfig, ...config }, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
+      setWeatherConfig: (workspaceId, boardId, config) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, weatherConfig: { ...board.weatherConfig, ...config }, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
       removeBoard: (workspaceId, boardId) =>
         set((state) => ({
           workspaces: state.workspaces.map((workspace) =>
@@ -470,6 +508,16 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             };
           }),
         })),
+
+      replaceAll: (workspaces, activeWorkspaceId) =>
+        set((state) => {
+          if (!workspaces.length) return state;
+          const activeExists = workspaces.some((w) => w.id === activeWorkspaceId);
+          return {
+            workspaces,
+            activeWorkspaceId: activeExists ? activeWorkspaceId : workspaces[0].id,
+          };
+        }),
 
       addLink: (workspaceId, boardId, title, url) =>
         set((state) => ({
