@@ -47,7 +47,7 @@ Board heights are always derived from content — you can't manually resize link
 ## Board Types
 
 ### Link Boards
-The default board type. Each link occupies one 24px row (favicon     + title). Boards auto-resize as you add or remove links.
+The default board type. Each link occupies one 24px row (favicon + title). Boards auto-resize as you add or remove links.
 
 **Display modes** (right-click → Display):
 | Mode | Description |

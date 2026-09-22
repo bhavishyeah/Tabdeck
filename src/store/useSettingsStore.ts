@@ -12,6 +12,8 @@ export interface AppSettings {
   autoCloseToolbar: number;
   autoLock: number;
   openLinksNewTab: boolean;
+  /** Search engine used when pressing Enter in the toolbar search box. */
+  searchEngine: 'google' | 'duckduckgo' | 'bing' | 'brave';
   /** New-board size in grid cells (1 cell = GRID_STEP px). */
   defaultBoardW: number;
   defaultBoardH: number;
@@ -63,6 +65,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoCloseToolbar: 0,
   autoLock: 0,
   openLinksNewTab: true,
+  searchEngine: 'google',
   defaultBoardW: 28, // 28 × 12px = 336px
   defaultBoardH: 14, // 14 × 12px = 168px
   gridScaleStep: GRID_STEP,

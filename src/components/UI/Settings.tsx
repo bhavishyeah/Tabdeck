@@ -10,6 +10,8 @@ import { GRID_STEP } from '../../lib/useGridDimensions';
 import { THEMES } from '../../lib/themes';
 import { clearBoardSync } from '../../lib/boardSync';
 import { getChromeAccountStatus } from '../../lib/settingsSync';
+import { SEARCH_ENGINES } from '../../lib/search';
+import { getLatestBackup, restoreLatestBackup, formatBackupAge } from '../../lib/backup';
 
 const FONTS = [
   { name: 'Montserrat', value: "'Montserrat', sans-serif" },
@@ -208,6 +210,8 @@ export function SettingsButton({ onResetOnboarding }: Props) {
   const [appearanceSub, setAppearanceSub] = useState<AppearanceSub>('themes');
   const [storageUsage, setStorageUsage] = useState('...');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [backupAge, setBackupAge] = useState('None yet');
   const [accountStatus, setAccountStatus] = useState<'signed-in' | 'signed-out' | 'unsupported' | 'unknown'>('unknown');
   const panelRef = useRef<HTMLDivElement>(null);
   const settings = useSettingsStore();
@@ -250,6 +254,26 @@ export function SettingsButton({ onResetOnboarding }: Props) {
       getChromeAccountStatus().then(setAccountStatus);
     }
   }, [open, tab]);
+
+  // Load the latest backup age when the Data tab opens.
+  useEffect(() => {
+    if (open && tab === 'data') {
+      getLatestBackup().then((snap) => {
+        setBackupAge(snap ? formatBackupAge(snap._ts) : 'None yet');
+        setConfirmRestore(false);
+      });
+    }
+  }, [open, tab]);
+
+  const handleRestoreBackup = async () => {
+    const s = useWorkspaceStore.getState();
+    const snap = await restoreLatestBackup(s.workspaces, s.activeWorkspaceId);
+    if (snap) {
+      useWorkspaceStore.getState().replaceAll(snap.workspaces, snap.activeWorkspaceId);
+    }
+    setConfirmRestore(false);
+    setOpen(false);
+  };
 
   const handleClearAll = () => {
     if (!confirmReset) { setConfirmReset(true); return; }
@@ -472,7 +496,7 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                           ['default', 'List'],
                           ['icons-vertical', 'V-Icons'],
                           ['icons-horizontal', 'H-Icons'],
-                          ['icons-floating', 'Floating'],
+                          ['icons-floating', 'Speed dial'],
                         ] as const).map(([m, label]) => (
                           <button key={m} type="button"
                             className={`f-pill ${settings.defaultDisplayMode === m ? 'is-active' : ''}`}
@@ -523,6 +547,25 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                     </div>
                   </SectionCard>
 
+                  <SectionCard title="Web Search">
+                    <p className="f-settings-hint-text">Press Enter in the search box to search the web. Typing a domain (e.g. github.com) opens it directly.</p>
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Search engine</span>
+                      <div className="f-pill-group">
+                        {SEARCH_ENGINES.map((eng) => (
+                          <button
+                            key={eng.id}
+                            type="button"
+                            className={`f-pill ${settings.searchEngine === eng.id ? 'is-active' : ''}`}
+                            onClick={() => settings.update({ searchEngine: eng.id })}
+                          >
+                            {eng.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </SectionCard>
+
                   <SectionCard title="Sync">
                     <p className="f-settings-hint-text">Settings sync automatically across signed-in Chrome on your PCs.</p>
 
@@ -567,6 +610,33 @@ export function SettingsButton({ onResetOnboarding }: Props) {
                       <span className="f-setting-value-text">{storageUsage}</span>
                     </div>
                     <button className="f-settings-action-btn" type="button" onClick={onResetOnboarding}>Re-run onboarding</button>
+                  </SectionCard>
+
+                  <SectionCard title="Backup">
+                    <p className="f-settings-hint-text">Frontly keeps an automatic local snapshot of your boards so you can recover from an accidental wipe or bad import.</p>
+                    <div className="f-setting-row">
+                      <span className="f-setting-label">Last snapshot</span>
+                      <span className="f-setting-value-text">{backupAge}</span>
+                    </div>
+                    {!confirmRestore ? (
+                      <button
+                        className="f-settings-action-btn"
+                        type="button"
+                        disabled={backupAge === 'None yet'}
+                        onClick={() => setConfirmRestore(true)}
+                      >Restore last backup</button>
+                    ) : (
+                      <div className="f-reset-confirm">
+                        <div className="f-reset-warning">
+                          <AlertTriangle size={13} strokeWidth={2} />
+                          <span>This replaces your current boards with the last snapshot.</span>
+                        </div>
+                        <div className="f-reset-actions">
+                          <button className="f-reset-cancel" type="button" onClick={() => setConfirmRestore(false)}>Cancel</button>
+                          <button className="f-reset-delete" type="button" onClick={handleRestoreBackup}>Restore</button>
+                        </div>
+                      </div>
+                    )}
                   </SectionCard>
 
                   <SectionCard title="Starter Template">

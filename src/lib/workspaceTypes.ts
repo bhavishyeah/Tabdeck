@@ -11,6 +11,8 @@ export interface TodoItem {
   id: string;
   text: string;
   done: boolean;
+  /** Optional due date as an ISO date string (YYYY-MM-DD). */
+  dueDate?: string;
 }
 
 /** Display modes for link boards */
@@ -42,10 +44,47 @@ export interface WeatherConfig {
   label?: string;
 }
 
+/** Per-timer/countdown-widget configuration */
+export interface TimerConfig {
+  /** Timer mode: countdown to a target date, or a pomodoro/interval timer. */
+  mode?: 'countdown' | 'pomodoro';
+  /** For 'countdown': target datetime as an ISO string. */
+  target?: string;
+  /** For 'countdown': optional label ("Launch day", "Vacation"). */
+  label?: string;
+  /** For 'pomodoro': focus length in minutes (default 25). */
+  focusMinutes?: number;
+  /** For 'pomodoro': break length in minutes (default 5). */
+  breakMinutes?: number;
+}
+
+/** Per-RSS-widget configuration */
+export interface RssConfig {
+  /** Feed URL. */
+  url?: string;
+  /** Max items to show (default 6). */
+  count?: number;
+}
+
+/** Per-VOLT-widget configuration */
+export interface VoltConfig {
+  /** Max items to display in the widget (default 5) */
+  maxItems?: number;
+  /** Show sender username (default true) */
+  showSender?: boolean;
+  /** Show relative timestamps (default true) */
+  showTimestamps?: boolean;
+  /** Filter: which content types to show */
+  showText?: boolean;
+  showLinks?: boolean;
+  showImages?: boolean;
+  showFiles?: boolean;
+}
+
 export interface BoardItem {
   id: string;
   name: string;
-  type?: 'links' | 'note' | 'todo' | 'weather' | 'clock';
+  type?: 'links' | 'note' | 'todo' | 'weather' | 'clock' | 'timer' | 'rss' | 'volt';
   color?: string;
   hideHeader?: boolean;
   noteContent?: string;
@@ -61,6 +100,12 @@ export interface BoardItem {
   clockConfig?: ClockConfig;
   /** Weather widget configuration (only used when type === 'weather') */
   weatherConfig?: WeatherConfig;
+  /** Timer/countdown widget configuration (only used when type === 'timer') */
+  timerConfig?: TimerConfig;
+  /** RSS widget configuration (only used when type === 'rss') */
+  rssConfig?: RssConfig;
+  /** VOLT widget configuration (only used when type === 'volt') */
+  voltConfig?: VoltConfig;
   /**
    * Position/size in grid cells. `gridStep` records the pixel size of one cell
    * at the time the layout was written, so layouts saved under an older grid

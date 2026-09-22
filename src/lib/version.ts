@@ -1,0 +1,74 @@
+/**
+ * Single source of truth for the app version and its "What's New" notes.
+ * Bump APP_VERSION here (alongside manifest.config.ts + package.json) and add
+ * a matching entry to WHATS_NEW so the panel shows once after an update.
+ */
+export const APP_VERSION = '1.5.0';
+
+export interface WhatsNewEntry {
+  version: string;
+  title: string;
+  items: string[];
+}
+
+/** Newest first. The panel shows entries newer than the user's last-seen version. */
+export const WHATS_NEW: WhatsNewEntry[] = [
+  {
+    version: '1.5.0',
+    title: "What's new in 1.5.0",
+    items: [
+      'Search the web from the search box — press Enter (Google, DuckDuckGo, Bing, or Brave).',
+      'Edit a saved link’s URL, not just its title. Paste a URL to auto-fill the name.',
+      'Todos now support due dates, drag-to-reorder, and rescheduling overdue tasks.',
+      'Notes render Markdown — headings, lists, checkboxes, links, and more.',
+      'Weather shows a 3-day forecast and “feels like”.',
+      'New widgets: Timer / Pomodoro and RSS headlines. Speed dial links open with Alt+1–9.',
+      'Automatic local backups — restore your boards from Settings → Data.',
+    ],
+  },
+];
+
+const SEEN_KEY = 'frontly-seen-version';
+
+/** The most recent version the user has acknowledged, or '' if never. */
+export function getSeenVersion(): string {
+  try {
+    return localStorage.getItem(SEEN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function setSeenVersion(v: string): void {
+  try {
+    localStorage.setItem(SEEN_KEY, v);
+  } catch {
+    // non-fatal
+  }
+}
+
+/** Simple semver-ish compare: returns true when `a` > `b`. */
+function isNewer(a: string, b: string): boolean {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const da = pa[i] ?? 0;
+    const db = pb[i] ?? 0;
+    if (da !== db) return da > db;
+  }
+  return false;
+}
+
+/**
+ * Entries the user hasn't seen yet. Empty when up to date, or on a truly fresh
+ * install (we mark the current version as seen without nagging first-timers).
+ */
+export function unseenWhatsNew(): WhatsNewEntry[] {
+  const seen = getSeenVersion();
+  if (!seen) {
+    // Fresh install / pre-versioning user: don't show the panel, just record.
+    setSeenVersion(APP_VERSION);
+    return [];
+  }
+  return WHATS_NEW.filter((e) => isNewer(e.version, seen));
+}

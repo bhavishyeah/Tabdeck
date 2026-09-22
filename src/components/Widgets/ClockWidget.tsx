@@ -26,7 +26,7 @@ export function ClockWidget({ config }: Props) {
     if (!containerRef.current) return;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (entry) setCompact(entry.contentRect.height < 100);
+      if (entry) setCompact(entry.contentRect.height < 50);
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();

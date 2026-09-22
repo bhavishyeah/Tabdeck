@@ -73,6 +73,12 @@ interface WorkspaceState {
   addNoteBoard: (workspaceId: string, name?: string) => void;
   addTodoBoard: (workspaceId: string, name?: string) => void;
   addClockBoard: (workspaceId: string) => void;
+  addTimerBoard: (workspaceId: string) => void;
+  addRssBoard: (workspaceId: string) => void;
+  addVoltBoard: (workspaceId: string) => void;
+  setTimerConfig: (workspaceId: string, boardId: string, config: import('../lib/workspaceTypes').TimerConfig) => void;
+  setRssConfig: (workspaceId: string, boardId: string, config: import('../lib/workspaceTypes').RssConfig) => void;
+  setVoltConfig: (workspaceId: string, boardId: string, config: import('../lib/workspaceTypes').VoltConfig) => void;
   duplicateBoard: (workspaceId: string, boardId: string) => void;
   updateNoteContent: (workspaceId: string, boardId: string, content: string) => void;
   updateTodos: (workspaceId: string, boardId: string, todos: TodoItem[]) => void;
@@ -92,6 +98,8 @@ interface WorkspaceState {
   replaceAll: (workspaces: WorkspaceItem[], activeWorkspaceId: string) => void;
   addLink: (workspaceId: string, boardId: string, title: string, url: string) => void;
   renameLink: (workspaceId: string, boardId: string, linkId: string, title: string) => void;
+  /** Edit a link's title/url/favicon in one action (favicon '' clears the override). */
+  updateLink: (workspaceId: string, boardId: string, linkId: string, patch: { title?: string; url?: string; favicon?: string }) => void;
   transferLink: (fromWorkspaceId: string, fromBoardId: string, linkId: string, toWorkspaceId: string, toBoardId: string) => void;
   reorderLinks: (workspaceId: string, boardId: string, fromIndex: number, toIndex: number) => void;
   removeLink: (workspaceId: string, boardId: string, linkId: string) => void;
@@ -203,9 +211,71 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
             const layout = placeNewBoard(workspace.boards.length);
+            const clockLayout = { ...layout, w: Math.min(24, Math.max(22, layout.w)) };
             return {
               ...workspace,
-              boards: [...workspace.boards, { ...createBoard('Clock'), type: 'clock' as const, layout }],
+              boards: [...workspace.boards, { ...createBoard('Clock'), type: 'clock' as const, layout: clockLayout }],
+              updatedAt: now(),
+            };
+          }),
+        })),
+
+      addTimerBoard: (workspaceId) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) => {
+            if (workspace.id !== workspaceId) return workspace;
+            if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            const base = placeNewBoard(workspace.boards.length);
+            const layout = { ...base, w: Math.min(20, base.w) }; // compact by default
+            return {
+              ...workspace,
+              boards: [...workspace.boards, { ...createBoard('Timer'), type: 'timer' as const, timerConfig: { mode: 'countdown' }, layout }],
+              updatedAt: now(),
+            };
+          }),
+        })),
+
+      addRssBoard: (workspaceId) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) => {
+            if (workspace.id !== workspaceId) return workspace;
+            if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            const layout = placeNewBoard(workspace.boards.length);
+            return {
+              ...workspace,
+              boards: [...workspace.boards, { ...createBoard('Headlines'), type: 'rss' as const, rssConfig: { count: 6 }, layout }],
+              updatedAt: now(),
+            };
+          }),
+        })),
+
+      addVoltBoard: (workspaceId) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) => {
+            if (workspace.id !== workspaceId) return workspace;
+            if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            const base = placeNewBoard(workspace.boards.length);
+            // VOLT widget works best at medium width — enough to read content
+            const layout = { ...base, w: Math.min(28, Math.max(22, base.w)) };
+            return {
+              ...workspace,
+              boards: [
+                ...workspace.boards,
+                {
+                  ...createBoard('VOLT'),
+                  type: 'volt' as const,
+                  voltConfig: {
+                    maxItems: 5,
+                    showSender: true,
+                    showTimestamps: true,
+                    showText: true,
+                    showLinks: true,
+                    showImages: true,
+                    showFiles: true,
+                  },
+                  layout,
+                },
+              ],
               updatedAt: now(),
             };
           }),
@@ -406,6 +476,57 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           ),
         })),
 
+      setTimerConfig: (workspaceId, boardId, config) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, timerConfig: { ...board.timerConfig, ...config }, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
+      setRssConfig: (workspaceId, boardId, config) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, rssConfig: { ...board.rssConfig, ...config }, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
+      setVoltConfig: (workspaceId, boardId, config) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? { ...board, voltConfig: { ...board.voltConfig, ...config }, updatedAt: now() }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
       removeBoard: (workspaceId, boardId) =>
         set((state) => ({
           workspaces: state.workspaces.map((workspace) =>
@@ -564,6 +685,40 @@ export const useWorkspaceStore = create<WorkspaceState>()(
                               ? { ...link, title, updatedAt: now() }
                               : link
                           ),
+                          updatedAt: now(),
+                        }
+                      : board
+                  ),
+                  updatedAt: now(),
+                }
+              : workspace
+          ),
+        })),
+
+      updateLink: (workspaceId, boardId, linkId, patch) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === workspaceId
+              ? {
+                  ...workspace,
+                  boards: workspace.boards.map((board) =>
+                    board.id === boardId
+                      ? {
+                          ...board,
+                          links: board.links.map((link) => {
+                            if (link.id !== linkId) return link;
+                            const next = { ...link, updatedAt: now() };
+                            if (patch.title !== undefined) next.title = patch.title;
+                            if (patch.url !== undefined) {
+                              const u = patch.url.trim();
+                              next.url = /^https?:\/\//i.test(u) || !u ? u : `https://${u}`;
+                            }
+                            if (patch.favicon !== undefined) {
+                              // Empty string clears the override so render falls back to the service.
+                              next.favicon = patch.favicon.trim() || undefined;
+                            }
+                            return next;
+                          }),
                           updatedAt: now(),
                         }
                       : board

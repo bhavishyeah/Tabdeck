@@ -48,6 +48,10 @@ export default defineManifest({
     'identity.email',
   ],
 
+  // Needed so the RSS widget can fetch arbitrary user-supplied feed URLs
+  // (which are otherwise blocked by CORS from the extension page).
+  host_permissions: ['<all_urls>'],
+
   commands: {
     'quick-save-tab': {
       suggested_key: {

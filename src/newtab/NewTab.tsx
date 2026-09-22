@@ -12,12 +12,13 @@ import {
 import RGL from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { CheckSquare, Clock as ClockIcon, CloudSun, LayoutGrid, Plus, Search, StickyNote, LayoutTemplate, Bookmark } from 'lucide-react';
+import { CheckSquare, Clock as ClockIcon, CloudSun, LayoutGrid, Plus, Search, StickyNote, LayoutTemplate, Bookmark, Timer as TimerIcon, Rss as RssIcon, Zap as ZapIcon } from 'lucide-react';
 import { getStarterTemplateBoards } from '../lib/starterTemplate';
 import { Board } from '../components/Board/Board';
 import { Toolbar } from '../components/UI/Toolbar';
 import { Toast } from '../components/UI/Toast';
 import { Onboarding } from '../components/UI/Onboarding';
+import { WhatsNew } from '../components/UI/WhatsNew';
 import { CommandPalette } from '../components/UI/CommandPalette';
 import { SettingsButton, applyFontCSS, applyGlassCSS } from '../components/UI/Settings';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -31,6 +32,8 @@ import { useUiStore } from '../store/useUiStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 import { useGridDimensions, GRID_STEP, ROWS_PER_LINK } from '../lib/useGridDimensions';
 import { getFaviconUrl } from '../lib/favicon';
+import { buildSearchUrl } from '../lib/search';
+import { saveBackup } from '../lib/backup';
 import type { LinkItem } from '../lib/workspaceTypes';
 import '../styles/global.css';
 
@@ -77,7 +80,7 @@ function xOverlaps(a: { x: number; w: number }, b: { x: number; w: number }) {
  * manual drag — RGL's own collision system handles that via preventCollision.
  */
 function pushDownAndOverflow(
-  items: Array<{ i: string; x: number; y: number; w: number; h: number; minW: number }>,
+  items: Array<{ i: string; x: number; y: number; w: number; h: number; minW: number; maxW?: number }>,
   cols: number,
   maxRows: number,
 ) {
@@ -331,6 +334,7 @@ export function NewTab() {
   const [commandOpen, setCommandOpen] = useState(false);
   const commandOpenRef = useRef(false);
   const [activeDragLink, setActiveDragLink] = useState<LinkItem | null>(null);
+  const [boardDragging, setBoardDragging] = useState(false);
   const appSettings = useSettingsStore();
   const grid = useGridDimensions();
 
@@ -474,6 +478,8 @@ export function NewTab() {
 
     const unsub = useWorkspaceStore.subscribe((state) => {
       pushState({ workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId });
+      // Keep a rolling local safety-net snapshot (debounced inside saveBackup).
+      saveBackup(state.workspaces, state.activeWorkspaceId);
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -527,6 +533,15 @@ export function NewTab() {
       if (ctrl && !alt && !e.shiftKey && e.code === 'KeyK') {
         e.preventDefault();
         setCommandOpen((v) => !v);
+      }
+
+      // Alt+1..9 — open the Nth link on any Speed dial / icon-mode board
+      // (data-speeddial-index is set on those links in Board.tsx).
+      if (alt && !ctrl && !e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
+        const n = e.code.slice(5);
+        const el = document.querySelector(`[data-speeddial-index="${n}"]`) as HTMLAnchorElement | null;
+        if (el) { e.preventDefault(); el.click(); }
+        return;
       }
 
       // Alt shortcuts (work regardless of toolbar state)
@@ -682,6 +697,7 @@ export function NewTab() {
         (board) =>
           // Widgets (no links) always show; link boards show if name or links match
           board.type === 'note' || board.type === 'todo' || board.type === 'clock' || board.type === 'weather' ||
+          board.type === 'timer' || board.type === 'rss' || board.type === 'volt' ||
           board.name.toLowerCase().includes(query) || board.links.length > 0
       );
   }, [activeWorkspace, search]);
@@ -752,14 +768,52 @@ export function NewTab() {
     if (!activeWorkspace) return [];
 
     const iconWidthOverride = new Map<string, number>();
+    // Widget heights must grow with the font-size setting, otherwise larger
+    // text clips inside a fixed-height panel. fscale mirrors --f-scale.
+    const fscale = Math.max(appSettings.fontSize / 10, 1);
+    // Round a pixel height up to whole grid cells (GRID_STEP px each).
+    const cellsFor = (px: number) => Math.ceil(px / GRID_STEP);
+
+    // Per-widget width bounds (grid cells). minW stops content from clipping;
+    // maxW caps how wide a widget can be dragged so it never looks stretched.
+    const widthBounds = new Map<string, { min: number; max?: number }>();
 
     // ── Step 1: compute height + icon-width overrides for every board ──
     const rawLayout = visibleBoards.map((board, index) => {
+      // NOTE: the panel itself adds ~26px vertical padding, so these budgets
+      // cover ONLY the inner content and are kept tight to avoid dead space.
       let contentH: number;
       if (board.type === 'clock') {
-        contentH = ROWS_PER_LINK * 3;
+        // Time line + period + optional date line; generous so nothing clips.
+        contentH = cellsFor((board.clockConfig?.showDate ?? true ? 96 : 58) * fscale);
+        // Wide enough for "16:39:56" at the display font without clipping.
+        widthBounds.set(board.id, { min: 20 });
       } else if (board.type === 'weather') {
-        contentH = ROWS_PER_LINK * 3;
+        // Current block (temp + desc/feels/city). The 3-day forecast row only
+        // appears at wider sizes and shares this height; keep it snug.
+        contentH = cellsFor(94 * fscale);
+        // min = today-only (compact), max = full 3-day layout. The widget's own
+        // ResizeObserver reveals 0→3 forecast days across this width range.
+        widthBounds.set(board.id, { min: 13, max: 40 });
+      } else if (board.type === 'timer') {
+        // Header (24px) + phase label + clock + control buttons (~78px).
+        contentH = ROWS_PER_LINK + cellsFor(78 * fscale);
+        widthBounds.set(board.id, { min: 16 });
+      } else if (board.type === 'rss') {
+        // Header + up to 4 headline rows shown by default (~28px each); more
+        // than 4 scroll internally, so height is capped at 4.
+        const count = Math.max(board.rssConfig?.count ?? 6, 1);
+        contentH = ROWS_PER_LINK + cellsFor(Math.min(count, 4) * 28 * fscale);
+        widthBounds.set(board.id, { min: 18 });
+      } else if (board.type === 'volt') {
+        // VOLT widget: sign-in form (~160px) or item list.
+        // Budget for 3 items at ~80px each + header (~28px). Items scroll
+        // internally beyond this, so we don't need to grow with maxItems.
+        const maxItems = board.voltConfig?.maxItems ?? 5;
+        const itemBudget = Math.min(maxItems, 3) * 80;
+        contentH = cellsFor((28 + itemBudget) * fscale);
+        // Wide enough to read sender + content + actions comfortably.
+        widthBounds.set(board.id, { min: 20 });
       } else if (board.type === 'note') {
         const lineCount = Math.max((board.noteContent || '').split('\n').length, 2);
         const headerRows = board.hideHeader ? 0 : ROWS_PER_LINK;
@@ -819,20 +873,29 @@ export function NewTab() {
 
         y = snapEven(y);
 
-        return { i: board.id, x, y, w, h: contentH, minW: iconW || MIN_W };
+        // Apply per-widget width bounds (clamp saved width into [min, max]).
+        const wb = widthBounds.get(board.id);
+        if (wb) {
+          const maxW = Math.min(wb.max ?? grid.cols, grid.cols);
+          w = Math.min(Math.max(w, wb.min), maxW);
+          x = Math.max(Math.min(x, grid.cols - w), 0);
+        }
+
+        return { i: board.id, x, y, w, h: contentH, minW: wb?.min ?? iconW ?? MIN_W, maxW: wb?.max };
       }
 
       // ── Boards WITHOUT a saved layout: index-based initial placement. ──
       // These will be saved to the store on the next frame (see useEffect below).
       const iconW = iconWidthOverride.get(board.id);
-      const finalW = iconW || DEFAULT_W;
+      const wb = widthBounds.get(board.id);
+      const finalW = iconW || (wb ? Math.min(wb.min + 4, wb.max ?? DEFAULT_W) : DEFAULT_W);
       const perRow = Math.max(Math.floor(grid.cols / (finalW + 1)), 1);
       const col = index % perRow;
       const row = Math.floor(index / perRow);
       const x = Math.max(Math.min(col * (finalW + 1), grid.cols - finalW), 0);
       const y = snapEven(row * (contentH + ROWS_PER_LINK));
 
-      return { i: board.id, x, y, w: finalW, h: contentH, minW: iconW || MIN_W };
+      return { i: board.id, x, y, w: finalW, h: contentH, minW: wb?.min ?? iconW ?? MIN_W, maxW: wb?.max };
     });
 
     // ── Step 2: run pushDownAndOverflow on ALL boards for display. ──
@@ -852,6 +915,7 @@ export function NewTab() {
     appSettings.defaultDisplayMode,
     appSettings.defaultIconSize,
     appSettings.defaultShowSections,
+    appSettings.fontSize,
   ]);
 
   // Save initial placement for any boards that don't have a saved layout yet.
@@ -892,6 +956,20 @@ export function NewTab() {
       w: newItem.w,
       h: newItem.h,
     }]);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') { setSearch(''); return; }
+    if (e.key !== 'Enter') return;
+    const term = search.trim();
+    if (!term) return;
+    e.preventDefault();
+    const dest = buildSearchUrl(term, appSettings.searchEngine);
+    if (appSettings.openLinksNewTab) {
+      window.open(dest, '_blank', 'noopener,noreferrer');
+    } else {
+      window.location.href = dest;
+    }
   };
 
 const handleImportBookmarks = async (folderId?: string) => {
@@ -1268,6 +1346,8 @@ const handleImportBookmarks = async (folderId?: string) => {
       )}
       <Toast />
 
+      {!showOnboarding && <WhatsNew />}
+
       {showOnboarding && (
         <Onboarding
           onComplete={() => {
@@ -1397,6 +1477,42 @@ const handleImportBookmarks = async (folderId?: string) => {
                     <ClockIcon size={14} strokeWidth={2} />
                     <span>Clock</span>
                   </button>
+                  <button
+                    className="td-link-context-item"
+                    type="button"
+                    onClick={() => {
+                      setWidgetsOpen(false);
+                      if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) { showToast('Workspace full', 'error'); return; }
+                      useWorkspaceStore.getState().addTimerBoard(activeWorkspace.id);
+                    }}
+                  >
+                    <TimerIcon size={14} strokeWidth={2} />
+                    <span>Timer</span>
+                  </button>
+                  <button
+                    className="td-link-context-item"
+                    type="button"
+                    onClick={() => {
+                      setWidgetsOpen(false);
+                      if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) { showToast('Workspace full', 'error'); return; }
+                      useWorkspaceStore.getState().addRssBoard(activeWorkspace.id);
+                    }}
+                  >
+                    <RssIcon size={14} strokeWidth={2} />
+                    <span>Headlines (RSS)</span>
+                  </button>
+                  <button
+                    className="td-link-context-item"
+                    type="button"
+                    onClick={() => {
+                      setWidgetsOpen(false);
+                      if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) { showToast('Workspace full', 'error'); return; }
+                      useWorkspaceStore.getState().addVoltBoard(activeWorkspace.id);
+                    }}
+                  >
+                    <ZapIcon size={14} strokeWidth={2} />
+                    <span>VOLT</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1405,9 +1521,11 @@ const handleImportBookmarks = async (folderId?: string) => {
               <Search size={16} strokeWidth={2.2} />
               <input
                 className="td-search-input"
-                placeholder="Search"
+                placeholder="Search boards, or press Enter to search the web"
+                aria-label="Search boards or search the web"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
               />
             </div>
           </div>
@@ -1500,7 +1618,7 @@ const handleImportBookmarks = async (folderId?: string) => {
           onDragCancel={() => setActiveDragLink(null)}
         >
           <RGL
-            className="td-board-grid"
+            className={`td-board-grid ${boardDragging ? 'is-dragging' : ''}`}
             layout={gridLayout}
             cols={grid.cols}
             rowHeight={GRID_STEP}
@@ -1515,8 +1633,10 @@ const handleImportBookmarks = async (folderId?: string) => {
             autoSize={true}
             style={{ minHeight: grid.height, width: grid.width }}
             draggableHandle=".td-board-drag-bar"
-            onDragStop={handleGridLayoutChange}
-            onResizeStop={handleGridLayoutChange}
+            onDragStart={() => setBoardDragging(true)}
+            onDragStop={(l, o, n, ph, e, el) => { setBoardDragging(false); handleGridLayoutChange(l, o, n); void ph; void e; void el; }}
+            onResizeStart={() => setBoardDragging(true)}
+            onResizeStop={(l, o, n, ph, e, el) => { setBoardDragging(false); handleGridLayoutChange(l, o, n); void ph; void e; void el; }}
             resizeHandles={['e']}
             resizeHandle={<span className="f-resize-bar" />}
           >

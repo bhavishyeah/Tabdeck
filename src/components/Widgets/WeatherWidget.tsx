@@ -1,12 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Cloud, CloudRain, Sun, CloudSnow, Wind, MapPin, RefreshCw } from 'lucide-react';
 import type { WeatherConfig } from '../../lib/workspaceTypes';
 
+interface DayForecast {
+  day: string;
+  hi: number;
+  lo: number;
+  icon: string;
+}
+
 interface WeatherData {
   temp: number;
+  feelsLike: number;
   description: string;
   city: string;
   icon: string;
+  forecast: DayForecast[];
 }
 
 type WeatherState = 'loading' | 'success' | 'error' | 'denied';
@@ -27,9 +36,18 @@ function describeCode(weatherCode: number): { description: string; icon: string 
   return { description, icon };
 }
 
+function weekdayLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1).toLocaleDateString(undefined, { weekday: 'short' });
+}
+
 export function WeatherWidget({ config }: Props) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [state, setState] = useState<WeatherState>('loading');
+  // Layout tier by width: 0 = temp only (no emoji), 1 = today details,
+  // 2/3/4 = today details + 1/2/3 forecast days.
+  const [tier, setTier] = useState(1);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   const unit = config?.unit ?? 'c';
   const manualLat = config?.lat;
@@ -37,90 +55,85 @@ export function WeatherWidget({ config }: Props) {
   const manualLabel = config?.label;
   const hasManualLocation = typeof manualLat === 'number' && typeof manualLon === 'number';
 
+  // Responsive tiers: pick how much to show based on the widget's own width.
   useEffect(() => {
-    let cancelled = false;
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0].contentRect.width;
+      setTier(w >= 340 ? 4 : w >= 270 ? 3 : w >= 210 ? 2 : w >= 130 ? 1 : 0);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-    const loadForCoords = async (lat: number, lon: number, fallbackCity: string) => {
-      try {
-        const tempUnit = unit === 'f' ? '&temperature_unit=fahrenheit' : '';
-        const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=auto${tempUnit}`
-        );
-        const data = await res.json();
-        if (cancelled) return;
-        const current = data.current;
-        const { description, icon } = describeCode(current.weather_code);
-        setWeather({
-          temp: Math.round(current.temperature_2m),
-          description,
-          city: fallbackCity || data.timezone?.split('/')[1]?.replace(/_/g, ' ') || 'Your location',
-          icon,
-        });
-        setState('success');
-      } catch {
-        if (!cancelled) setState('error');
-      }
-    };
-
-    setState('loading');
-
-    // Manual location bypasses geolocation entirely
-    if (hasManualLocation) {
-      loadForCoords(manualLat!, manualLon!, manualLabel || 'Location');
-      return () => { cancelled = true; };
-    }
-
-    if (!navigator.geolocation) {
-      setState('error');
-      return () => { cancelled = true; };
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        loadForCoords(latitude, longitude, '');
-      },
-      () => { if (!cancelled) setState('denied'); },
-      { timeout: 8000 }
-    );
-
-    return () => { cancelled = true; };
-    // Re-fetch when unit or manual location changes
-  }, [unit, manualLat, manualLon, manualLabel, hasManualLocation]);
-
-  const retry = () => {
-    // Force a re-run by toggling state; the effect re-fires on state? No —
-    // simplest: re-request geolocation directly.
-    setState('loading');
-    if (hasManualLocation) {
+  const fetchWeather = useCallback(
+    async (lat: number, lon: number, fallbackCity: string, signal?: AbortSignal) => {
       const tempUnit = unit === 'f' ? '&temperature_unit=fahrenheit' : '';
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${manualLat}&longitude=${manualLon}&current=temperature_2m,weather_code&timezone=auto${tempUnit}`)
-        .then((r) => r.json())
-        .then((data) => {
-          const { description, icon } = describeCode(data.current.weather_code);
-          setWeather({ temp: Math.round(data.current.temperature_2m), description, city: manualLabel || 'Location', icon });
-          setState('success');
-        })
-        .catch(() => setState('error'));
-      return;
-    }
-    if (!navigator.geolocation) { setState('error'); return; }
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords;
-          const tempUnit = unit === 'f' ? '&temperature_unit=fahrenheit' : '';
-          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto${tempUnit}`);
-          const data = await res.json();
-          const { description, icon } = describeCode(data.current.weather_code);
-          setWeather({ temp: Math.round(data.current.temperature_2m), description, city: data.timezone?.split('/')[1]?.replace(/_/g, ' ') || 'Your location', icon });
-          setState('success');
-        } catch { setState('error'); }
-      },
-      () => setState('denied'),
-      { timeout: 8000 }
-    );
-  };
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+          `&current=temperature_2m,apparent_temperature,weather_code` +
+          `&daily=weather_code,temperature_2m_max,temperature_2m_min` +
+          `&forecast_days=4&timezone=auto${tempUnit}`,
+        signal ? { signal } : undefined
+      );
+      const data = await res.json();
+      const current = data.current;
+      const { description, icon } = describeCode(current.weather_code);
+
+      const daily = data.daily ?? {};
+      const times: string[] = daily.time ?? [];
+      const forecast: DayForecast[] = times.slice(1, 4).map((t: string, i: number) => {
+        const idx = i + 1;
+        return {
+          day: weekdayLabel(t),
+          hi: Math.round(daily.temperature_2m_max?.[idx] ?? 0),
+          lo: Math.round(daily.temperature_2m_min?.[idx] ?? 0),
+          icon: describeCode(daily.weather_code?.[idx] ?? 0).icon,
+        };
+      });
+
+      return {
+        temp: Math.round(current.temperature_2m),
+        feelsLike: Math.round(current.apparent_temperature ?? current.temperature_2m),
+        description,
+        city: fallbackCity || data.timezone?.split('/')[1]?.replace(/_/g, ' ') || 'Your location',
+        icon,
+        forecast,
+      } as WeatherData;
+    },
+    [unit]
+  );
+
+  const load = useCallback(
+    (signal?: AbortSignal) => {
+      setState('loading');
+      const apply = (p: Promise<WeatherData>) =>
+        p.then((w) => { if (!signal?.aborted) { setWeather(w); setState('success'); } })
+         .catch(() => { if (!signal?.aborted) setState('error'); });
+
+      if (hasManualLocation) {
+        apply(fetchWeather(manualLat!, manualLon!, manualLabel || 'Location', signal));
+        return;
+      }
+      if (!navigator.geolocation) { setState('error'); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => apply(fetchWeather(pos.coords.latitude, pos.coords.longitude, '', signal)),
+        () => { if (!signal?.aborted) setState('denied'); },
+        { timeout: 8000 }
+      );
+    },
+    [fetchWeather, hasManualLocation, manualLat, manualLon, manualLabel]
+  );
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    // load() sets a 'loading' state then fetches; the synchronous setState is
+    // intentional (accepted pattern shared with RssWidget).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load(ctrl.signal);
+    return () => ctrl.abort();
+  }, [load]);
 
   const getIcon = (icon: string, size = 28) => {
     const props = { size, strokeWidth: 1.5 };
@@ -133,9 +146,15 @@ export function WeatherWidget({ config }: Props) {
     }
   };
 
+  const refreshBtn = (
+    <button className="f-weather-refresh" type="button" onClick={() => load()} aria-label="Refresh weather" title="Refresh">
+      <RefreshCw size={12} strokeWidth={2} />
+    </button>
+  );
+
   if (state === 'loading') {
     return (
-      <div className="f-weather f-weather--loading">
+      <div className="f-weather f-weather--loading" ref={rootRef}>
         <div className="f-weather-skeleton f-weather-skeleton--icon" />
         <div className="f-weather-skeleton f-weather-skeleton--temp" />
         <div className="f-weather-skeleton f-weather-skeleton--text" />
@@ -145,10 +164,10 @@ export function WeatherWidget({ config }: Props) {
 
   if (state === 'denied') {
     return (
-      <div className="f-weather f-weather--state">
+      <div className="f-weather f-weather--state" ref={rootRef}>
         <MapPin size={20} strokeWidth={1.5} style={{ opacity: 0.5 }} />
         <span className="f-weather-state-text">Location unavailable</span>
-        <button className="f-weather-retry" type="button" onClick={retry}>
+        <button className="f-weather-retry" type="button" onClick={() => load()}>
           <RefreshCw size={12} strokeWidth={2} /> Retry
         </button>
       </div>
@@ -157,10 +176,10 @@ export function WeatherWidget({ config }: Props) {
 
   if (state === 'error') {
     return (
-      <div className="f-weather f-weather--state">
+      <div className="f-weather f-weather--state" ref={rootRef}>
         <Cloud size={20} strokeWidth={1.5} style={{ opacity: 0.5 }} />
         <span className="f-weather-state-text">Weather unavailable</span>
-        <button className="f-weather-retry" type="button" onClick={retry}>
+        <button className="f-weather-retry" type="button" onClick={() => load()}>
           <RefreshCw size={12} strokeWidth={2} /> Try again
         </button>
       </div>
@@ -168,15 +187,37 @@ export function WeatherWidget({ config }: Props) {
   }
 
   if (!weather) return null;
+  const deg = unit === 'f' ? 'F' : 'C';
+  const tempOnly = tier === 0;              // minimum: just the temperature
+  const forecastDays = Math.max(tier - 1, 0); // tier 1 = 0 days, tier 2 = 1 day, ...
+  const shownForecast = weather.forecast.slice(0, forecastDays);
+  // At 2+ forecast days lay everything out on one horizontal row.
+  const wide = tier >= 3;
 
   return (
-    <div className="f-weather">
-      <div className="f-weather-icon">{getIcon(weather.icon)}</div>
-      <div className="f-weather-body">
-        <span className="f-weather-temp">{weather.temp}°{unit === 'f' ? 'F' : 'C'}</span>
-        <span className="f-weather-desc">{weather.description}</span>
-        <span className="f-weather-city">{weather.city}</span>
+    <div className={`f-weather ${wide ? 'f-weather--wide' : ''}`} ref={rootRef}>
+      {refreshBtn}
+      <div className="f-weather-current">
+        {!tempOnly && <div className="f-weather-icon">{getIcon(weather.icon, 28)}</div>}
+        <div className="f-weather-body">
+          <span className="f-weather-temp">{weather.temp}°{deg}</span>
+          {!tempOnly && <span className="f-weather-desc">{weather.description}</span>}
+          {!tempOnly && <span className="f-weather-feels">Feels like {weather.feelsLike}°</span>}
+          {!tempOnly && <span className="f-weather-city">{weather.city}</span>}
+        </div>
       </div>
+
+      {shownForecast.length > 0 && (
+        <div className="f-weather-forecast">
+          {shownForecast.map((d) => (
+            <div className="f-weather-fc-day" key={d.day}>
+              <span className="f-weather-fc-label">{d.day}</span>
+              <span className="f-weather-fc-icon">{getIcon(d.icon, 15)}</span>
+              <span className="f-weather-fc-temp">{d.hi}°<span className="f-weather-fc-lo">{d.lo}°</span></span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

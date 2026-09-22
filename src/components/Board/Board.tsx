@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -9,8 +9,15 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { LinkCard } from '../Card/LinkCard';
 import { getFaviconUrl } from '../../lib/favicon';
 import { TodoBoardContent } from '../Widgets/TodoBoard';
+import { NoteBoardContent } from '../Widgets/NoteBoard';
 import { WeatherWidget } from '../Widgets/WeatherWidget';
 import { ClockWidget } from '../Widgets/ClockWidget';
+import { TimerWidget } from '../Widgets/TimerWidget';
+import { RssWidget } from '../Widgets/RssWidget';
+import { VoltWidget } from '../Widgets/VoltWidget';
+import { DateTimePicker } from '../UI/DateTimePicker';
+import { Autocomplete } from '../UI/Autocomplete';
+import { searchTimezones } from '../../lib/timezones';
 
 interface Props {
   workspaceId: string;
@@ -19,11 +26,12 @@ interface Props {
 }
 
 export function Board({ workspaceId, board, workspaces }: Props) {
-  const { removeBoard, renameBoard, addLink, removeLink, renameLink, transferBoard, transferLink, setBoardColor, updateNoteContent, updateTodos, duplicateBoard, toggleBoardHeader, setBoardDisplayMode, setBoardIconSize, setBoardSections, setClockConfig, setWeatherConfig } =
+  const { removeBoard, renameBoard, addLink, removeLink, renameLink, updateLink, transferBoard, transferLink, setBoardColor, updateNoteContent, updateTodos, duplicateBoard, toggleBoardHeader, setBoardDisplayMode, setBoardIconSize, setBoardSections, setClockConfig, setWeatherConfig, setTimerConfig, setRssConfig, setVoltConfig } =
     useWorkspaceStore();
 
-  // Determine if this is a widget (clock, weather, note, todo) — must be before any hooks that use it
-  const isWidget = board.type === 'clock' || board.type === 'weather' || board.type === 'note' || board.type === 'todo';
+  // Determine if this is a widget (non-link board) — must be before any hooks that use it
+  const isWidget = board.type === 'clock' || board.type === 'weather' || board.type === 'note' || board.type === 'todo'
+    || board.type === 'timer' || board.type === 'rss' || board.type === 'volt';
 
   const textMode = useSettingsStore((s) => s.textMode);
   const boardTextColor = useSettingsStore((s) => isWidget ? s.widgetTextColor : s.boardTextColor);
@@ -36,6 +44,7 @@ export function Board({ workspaceId, board, workspaces }: Props) {
   const glassSaturation = useSettingsStore((s) => isWidget ? s.widgetSaturation : s.glassSaturation);
   const grainIntensity = useSettingsStore((s) => isWidget ? s.widgetGrain : s.grainIntensity);
   const widgetColor = useSettingsStore((s) => s.widgetColor);
+  const openLinksNewTab = useSettingsStore((s) => s.openLinksNewTab);
   const defaultDisplayMode = useSettingsStore((s) => s.defaultDisplayMode);
   const defaultIconSize = useSettingsStore((s) => s.defaultIconSize);
   const defaultShowSections = useSettingsStore((s) => s.defaultShowSections);
@@ -55,11 +64,6 @@ export function Board({ workspaceId, board, workspaces }: Props) {
   const widgetConfigRef = useRef<HTMLDivElement | null>(null);
   const widgetPopRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-grow note widget: calculate required grid height from line count
-  // Note content change — height auto-computed by grid layout
-  const handleNoteChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    updateNoteContent(workspaceId, board.id, e.target.value);
-  }, [workspaceId, board.id, updateNoteContent]);
 
   const { setNodeRef, isOver } = useDroppable({
     id: `board-drop-${board.id}`,
@@ -151,30 +155,41 @@ export function Board({ workspaceId, board, workspaces }: Props) {
   // (which has overflow:hidden) or the screen edges.
   const openWidgetConfig = () => {
     if (widgetConfigOpen) { setWidgetConfigOpen(false); return; }
+    // Seed a position just below the gear; the effect below refines it once the
+    // real popover size is known so it always sits snug next to the widget.
     const btn = widgetConfigRef.current?.getBoundingClientRect();
-    const POP_W = 220;
-    const POP_H = 240; // generous upper bound; real height is usually less
+    setWidgetConfigPos({ top: (btn ? btn.bottom : 40) + 4, left: (btn ? btn.right - 220 : 40) });
+    setWidgetConfigOpen(true);
+  };
+
+  // Refine the popover position from its real measured size, anchored to the
+  // gear button and clamped to the viewport (flips above only if it truly
+  // won't fit below).
+  useEffect(() => {
+    if (!widgetConfigOpen) return;
+    const btn = widgetConfigRef.current?.getBoundingClientRect();
+    const pop = widgetPopRef.current?.getBoundingClientRect();
+    if (!btn || !pop) return;
     const pad = 8;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Prefer opening below the gear, right-aligned to it.
-    let left = (btn ? btn.right : vw / 2) - POP_W;
-    let top = (btn ? btn.bottom : 40) + 4;
+    let left = btn.right - pop.width;       // right-align to the gear
+    let top = btn.bottom + 4;               // just below the gear
 
-    // Clamp horizontally
     if (left < pad) left = pad;
-    if (left + POP_W > vw - pad) left = Math.max(pad, vw - POP_W - pad);
+    if (left + pop.width > vw - pad) left = Math.max(pad, vw - pop.width - pad);
 
-    // Flip above the gear if it would overflow the bottom
-    if (top + POP_H > vh - pad && btn) {
-      const above = btn.top - POP_H - 4;
-      top = above >= pad ? above : Math.max(pad, vh - POP_H - pad);
+    if (top + pop.height > vh - pad) {
+      const above = btn.top - pop.height - 4;
+      top = above >= pad ? above : Math.max(pad, vh - pop.height - pad);
     }
 
-    setWidgetConfigPos({ top, left });
-    setWidgetConfigOpen(true);
-  };
+    // Only update when it actually moved, to avoid an update loop.
+    setWidgetConfigPos((prev) =>
+      Math.abs(prev.top - top) > 1 || Math.abs(prev.left - left) > 1 ? { top, left } : prev
+    );
+  }, [widgetConfigOpen, board.timerConfig?.mode]);
 
   // Focus rename input
   useEffect(() => {
@@ -202,6 +217,9 @@ export function Board({ workspaceId, board, workspaces }: Props) {
   const handleBoardNameContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // Seed menuPos at the click point immediately so the menu never flashes at
+    // the top-left corner before the clamp effect measures and adjusts it.
+    setMenuPos({ top: e.clientY, left: e.clientX });
     setBoardContextMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -328,7 +346,7 @@ export function Board({ workspaceId, board, workspaces }: Props) {
   return (
     <section
       ref={mergedRef}
-      className={`td-board-panel ${isOver ? 'is-over' : ''} ${showForm ? 'is-form-open' : ''} ${(board.displayMode || defaultDisplayMode) === 'icons-floating' ? 'td-board-panel--floating' : ''}`}
+      className={`td-board-panel ${isOver ? 'is-over' : ''} ${showForm ? 'is-form-open' : ''} ${isWidget ? 'td-board-panel--widget' : ''} ${(board.displayMode || defaultDisplayMode) === 'icons-floating' ? 'td-board-panel--floating' : ''}`}
       style={boardStyle}
       onContextMenu={handleBoardNameContextMenu}
     >
@@ -340,8 +358,8 @@ export function Board({ workspaceId, board, workspaces }: Props) {
       {/* Drag handle bar */}
       <div className="td-board-drag-bar" />
 
-      {/* Widget config gear (clock / weather) */}
-      {(board.type === 'clock' || board.type === 'weather') && (
+      {/* Widget config gear (clock / weather / timer / rss / volt) */}
+      {(board.type === 'clock' || board.type === 'weather' || board.type === 'timer' || board.type === 'rss' || board.type === 'volt') && (
         <div className="f-widget-config" ref={widgetConfigRef}>
           <button
             type="button"
@@ -391,13 +409,14 @@ export function Board({ workspaceId, board, workspaces }: Props) {
             </div>
             <div className="f-wc-row f-wc-row--stack">
               <span className="f-wc-label">Timezone</span>
-              <input
-                className="f-wc-input"
-                placeholder="Local (e.g. Europe/London)"
-                defaultValue={board.clockConfig?.timezone || ''}
-                onBlur={(e) => setClockConfig(workspaceId, board.id, { timezone: e.target.value.trim() })}
-                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              <Autocomplete
+                initialText={board.clockConfig?.timezone || ''}
+                placeholder="Search city/region (blank = local)"
+                getOptions={(q) => searchTimezones(q)}
+                onSelect={(opt) => setClockConfig(workspaceId, board.id, { timezone: opt.value })}
+                onSubmitText={(t) => { setClockConfig(workspaceId, board.id, { timezone: t }); setWidgetConfigOpen(false); }}
               />
+              <div className="f-wc-hint">Blank uses this device's local time.</div>
             </div>
           </div>,
           document.body
@@ -420,26 +439,199 @@ export function Board({ workspaceId, board, workspaces }: Props) {
             </div>
             <div className="f-wc-row f-wc-row--stack">
               <span className="f-wc-label">Location</span>
+              <Autocomplete
+                initialText={board.weatherConfig?.label || ''}
+                placeholder="Search city (blank = auto)"
+                getOptions={async (q) => {
+                  if (q.trim().length < 2) return [];
+                  try {
+                    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q.trim())}&count=8`);
+                    const d = await r.json();
+                    return (d?.results ?? []).map((hit: { id: number; name: string; admin1?: string; country?: string; latitude: number; longitude: number }) => ({
+                      value: String(hit.id),
+                      label: hit.name,
+                      sublabel: [hit.admin1, hit.country].filter(Boolean).join(', '),
+                      // stash coords on the option via a data map below
+                      lat: hit.latitude,
+                      lon: hit.longitude,
+                    }));
+                  } catch { return []; }
+                }}
+                onSelect={(opt) => {
+                  const o = opt as unknown as { label: string; lat: number; lon: number };
+                  setWeatherConfig(workspaceId, board.id, { lat: o.lat, lon: o.lon, label: o.label });
+                }}
+                onSubmitText={(t) => {
+                  if (!t) { setWeatherConfig(workspaceId, board.id, { lat: undefined, lon: undefined, label: undefined }); }
+                }}
+              />
+              <div className="f-wc-hint">Leave blank to use your device location.</div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
+
+      {widgetConfigOpen && board.type === 'timer' &&
+        createPortal(
+          <div
+            ref={widgetPopRef}
+            className="f-widget-config-pop"
+            style={{ position: 'fixed', top: widgetConfigPos.top, left: widgetConfigPos.left }}
+          >
+            <div className="f-wc-row">
+              <span className="f-wc-label">Mode</span>
+              <div className="f-pill-group">
+                <button type="button" className={`f-pill ${(board.timerConfig?.mode ?? 'countdown') === 'countdown' ? 'is-active' : ''}`} onClick={() => setTimerConfig(workspaceId, board.id, { mode: 'countdown' })}>Countdown</button>
+                <button type="button" className={`f-pill ${board.timerConfig?.mode === 'pomodoro' ? 'is-active' : ''}`} onClick={() => setTimerConfig(workspaceId, board.id, { mode: 'pomodoro' })}>Pomodoro</button>
+              </div>
+            </div>
+
+            <div className="f-wc-mode-body" key={board.timerConfig?.mode ?? 'countdown'}>
+            {(board.timerConfig?.mode ?? 'countdown') === 'countdown' ? (
+              <>
+                <div className="f-wc-row f-wc-row--stack">
+                  <span className="f-wc-label">Label</span>
+                  <input
+                    className="f-wc-input"
+                    placeholder="e.g. Launch day"
+                    defaultValue={board.timerConfig?.label || ''}
+                    onBlur={(e) => setTimerConfig(workspaceId, board.id, { label: e.target.value.trim() })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                  />
+                </div>
+                <div className="f-wc-row f-wc-row--stack">
+                  <span className="f-wc-label">Target date &amp; time</span>
+                  <DateTimePicker
+                    value={board.timerConfig?.target || ''}
+                    onChange={(iso) => setTimerConfig(workspaceId, board.id, { target: iso || undefined })}
+                    onSubmit={() => setWidgetConfigOpen(false)}
+                  />
+                </div>
+                <button type="button" className="f-wc-save" onClick={() => setWidgetConfigOpen(false)}>Save</button>
+              </>
+            ) : (
+              <>
+                <div className="f-wc-row">
+                  <span className="f-wc-label">Focus (min)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    className="f-wc-input f-wc-input--sm"
+                    defaultValue={board.timerConfig?.focusMinutes ?? 25}
+                    onBlur={(e) => setTimerConfig(workspaceId, board.id, { focusMinutes: Math.max(1, Number(e.target.value) || 25) })}
+                  />
+                </div>
+                <div className="f-wc-row">
+                  <span className="f-wc-label">Break (min)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    className="f-wc-input f-wc-input--sm"
+                    defaultValue={board.timerConfig?.breakMinutes ?? 5}
+                    onBlur={(e) => setTimerConfig(workspaceId, board.id, { breakMinutes: Math.max(1, Number(e.target.value) || 5) })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setWidgetConfigOpen(false); }}
+                  />
+                </div>
+                <button type="button" className="f-wc-save" onClick={() => setWidgetConfigOpen(false)}>Save</button>
+              </>
+            )}
+            </div>
+          </div>,
+          document.body
+        )
+      }
+
+      {widgetConfigOpen && board.type === 'rss' &&
+        createPortal(
+          <div
+            ref={widgetPopRef}
+            className="f-widget-config-pop"
+            style={{ position: 'fixed', top: widgetConfigPos.top, left: widgetConfigPos.left }}
+          >
+            <div className="f-wc-row f-wc-row--stack">
+              <span className="f-wc-label">Feed URL</span>
               <input
                 className="f-wc-input"
-                placeholder="City name (blank = auto)"
-                defaultValue={board.weatherConfig?.label || ''}
-                onBlur={(e) => {
-                  const label = e.target.value.trim();
-                  if (!label) { setWeatherConfig(workspaceId, board.id, { lat: undefined, lon: undefined, label: undefined }); return; }
-                  // Geocode via Open-Meteo's free geocoding API
-                  fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(label)}&count=1`)
-                    .then((r) => r.json())
-                    .then((d) => {
-                      const hit = d?.results?.[0];
-                      if (hit) setWeatherConfig(workspaceId, board.id, { lat: hit.latitude, lon: hit.longitude, label: hit.name });
-                    })
-                    .catch(() => {});
-                }}
+                placeholder="https://example.com/feed.xml"
+                defaultValue={board.rssConfig?.url || ''}
+                onBlur={(e) => setRssConfig(workspaceId, board.id, { url: e.target.value.trim() })}
                 onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
               />
             </div>
-            <div className="f-wc-hint">Leave blank to use your device location.</div>
+            <div className="f-wc-row">
+              <span className="f-wc-label">Items</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                className="f-wc-input f-wc-input--sm"
+                defaultValue={board.rssConfig?.count ?? 6}
+                onBlur={(e) => setRssConfig(workspaceId, board.id, { count: Math.min(20, Math.max(1, Number(e.target.value) || 6)) })}
+              />
+            </div>
+            <div className="f-wc-hint">Paste any RSS or Atom feed URL.</div>
+          </div>,
+          document.body
+        )
+      }
+
+      {widgetConfigOpen && board.type === 'volt' &&
+        createPortal(
+          <div
+            ref={widgetPopRef}
+            className="f-widget-config-pop"
+            style={{ position: 'fixed', top: widgetConfigPos.top, left: widgetConfigPos.left }}
+          >
+            <div className="f-wc-row">
+              <span className="f-wc-label">Items to show</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                className="f-wc-input f-wc-input--sm"
+                defaultValue={board.voltConfig?.maxItems ?? 5}
+                onBlur={(e) => setVoltConfig(workspaceId, board.id, { maxItems: Math.min(20, Math.max(1, Number(e.target.value) || 5)) })}
+              />
+            </div>
+            <div className="f-wc-row">
+              <span className="f-wc-label">Show sender</span>
+              <button
+                type="button"
+                className={`f-toggle ${(board.voltConfig?.showSender ?? true) ? 'is-on' : ''}`}
+                onClick={() => setVoltConfig(workspaceId, board.id, { showSender: !(board.voltConfig?.showSender ?? true) })}
+                aria-label="Toggle sender"
+              ><span className="f-toggle-knob" /></button>
+            </div>
+            <div className="f-wc-row">
+              <span className="f-wc-label">Timestamps</span>
+              <button
+                type="button"
+                className={`f-toggle ${(board.voltConfig?.showTimestamps ?? true) ? 'is-on' : ''}`}
+                onClick={() => setVoltConfig(workspaceId, board.id, { showTimestamps: !(board.voltConfig?.showTimestamps ?? true) })}
+                aria-label="Toggle timestamps"
+              ><span className="f-toggle-knob" /></button>
+            </div>
+            <div className="td-context-divider" style={{ margin: '6px 0' }} />
+            <div className="f-wc-label" style={{ marginBottom: 4 }}>Content types</div>
+            {([
+              ['showText', 'Text'] as const,
+              ['showLinks', 'Links'] as const,
+              ['showImages', 'Images'] as const,
+              ['showFiles', 'Files'] as const,
+            ]).map(([key, label]) => (
+              <div key={key} className="f-wc-row">
+                <span className="f-wc-label">{label}</span>
+                <button
+                  type="button"
+                  className={`f-toggle ${(board.voltConfig?.[key] ?? true) ? 'is-on' : ''}`}
+                  onClick={() => setVoltConfig(workspaceId, board.id, { [key]: !(board.voltConfig?.[key] ?? true) })}
+                  aria-label={`Toggle ${label}`}
+                ><span className="f-toggle-knob" /></button>
+              </div>
+            ))}
           </div>,
           document.body
         )
@@ -449,9 +641,10 @@ export function Board({ workspaceId, board, workspaces }: Props) {
         const mode = board.displayMode || defaultDisplayMode;
         // All icon modes hide the header
         if (mode === 'icons-vertical' || mode === 'icons-horizontal' || mode === 'icons-floating') return false;
-        if (board.type === 'clock' || board.type === 'weather') return false;
+        if (board.type === 'clock' || board.type === 'weather' || board.type === 'volt') return false;
         if (board.hideHeader) return false;
         return true;
+        // Note: timer/rss/speeddial keep their header (it doubles as a title).
       })() && (
         <div className="td-board-top">
           {isRenaming ? (
@@ -489,12 +682,9 @@ export function Board({ workspaceId, board, workspaces }: Props) {
       )}
 
       {board.type === 'note' ? (
-        <textarea
-          className="td-note-textarea"
-          value={board.noteContent || ''}
-          onChange={handleNoteChange}
-          placeholder="Write your note here..."
-          spellCheck={false}
+        <NoteBoardContent
+          content={board.noteContent || ''}
+          onChange={(content) => updateNoteContent(workspaceId, board.id, content)}
         />
       ) : board.type === 'todo' ? (
         <TodoBoardContent
@@ -505,6 +695,12 @@ export function Board({ workspaceId, board, workspaces }: Props) {
         <WeatherWidget config={board.weatherConfig} />
       ) : board.type === 'clock' ? (
         <ClockWidget config={board.clockConfig} />
+      ) : board.type === 'timer' ? (
+        <TimerWidget config={board.timerConfig} />
+      ) : board.type === 'rss' ? (
+        <RssWidget config={board.rssConfig} />
+      ) : board.type === 'volt' ? (
+        <VoltWidget config={board.voltConfig} />
       ) : (() => {
         // Link board — check display mode
         const mode = board.displayMode || defaultDisplayMode;
@@ -516,14 +712,15 @@ export function Board({ workspaceId, board, workspaces }: Props) {
           const isHorizontal = mode === 'icons-horizontal' || mode === 'icons-floating';
           return (
             <div className={`f-icon-strip ${isHorizontal ? 'f-icon-strip--h' : 'f-icon-strip--v'} ${sections ? 'f-icon-strip--sections' : ''}`}>
-              {board.links.map((link) => (
+              {board.links.map((link, i) => (
                 <a
                   key={link.id}
                   href={link.url}
                   className="f-icon-item"
-                  title={link.title}
-                  target="_blank"
+                  title={i < 9 ? `${link.title} (Alt+${i + 1})` : link.title}
+                  target={openLinksNewTab ? '_blank' : '_self'}
                   rel="noopener noreferrer"
+                  data-speeddial-index={i < 9 ? i + 1 : undefined}
                   style={{ width: iconSz, height: iconSz }}
                 >
                   <img
@@ -563,6 +760,7 @@ export function Board({ workspaceId, board, workspaces }: Props) {
                     link={link}
                     onDelete={() => removeLink(workspaceId, board.id, link.id)}
                     onRename={(newTitle) => renameLink(workspaceId, board.id, link.id, newTitle)}
+                    onEdit={(patch) => updateLink(workspaceId, board.id, link.id, patch)}
                     onTransfer={(toWsId, toBoardId) => transferLink(workspaceId, board.id, link.id, toWsId, toBoardId)}
                     transferTargets={otherWorkspaces.flatMap((ws) =>
                       ws.boards.map((b) => ({
@@ -679,7 +877,7 @@ export function Board({ workspaceId, board, workspaces }: Props) {
                   ['default', 'List', LayoutGrid],
                   ['icons-vertical', 'Icons vertical', GripVertical],
                   ['icons-horizontal', 'Icons horizontal', Columns],
-                  ['icons-floating', 'Icons floating', Maximize2],
+                  ['icons-floating', 'Speed dial', Maximize2],
                 ] as const).map(([mode, label, Icon]) => (
                   <button
                     key={mode}
