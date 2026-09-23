@@ -806,12 +806,15 @@ export function NewTab() {
         contentH = ROWS_PER_LINK + cellsFor(Math.min(count, 4) * 28 * fscale);
         widthBounds.set(board.id, { min: 18 });
       } else if (board.type === 'volt') {
-        // VOLT widget: sign-in form (~160px) or item list.
-        // Budget for 3 items at ~80px each + header (~28px). Items scroll
-        // internally beyond this, so we don't need to grow with maxItems.
+        // VOLT widget height must fit BOTH states without clipping:
+        //  - signed out: sign-in form (header + subtitle + 2 inputs + button
+        //    + gaps) ≈ 200px
+        //  - signed in: header (~24px) + up to 2 item rows (~58px each)
+        // The store can't see auth state, so budget for the taller of the two.
         const maxItems = board.voltConfig?.maxItems ?? 5;
-        const itemBudget = Math.min(maxItems, 3) * 80;
-        contentH = cellsFor((28 + itemBudget) * fscale);
+        const listBudget = 24 + Math.min(maxItems, 2) * 58;
+        const signinBudget = 200;
+        contentH = cellsFor(Math.max(listBudget, signinBudget) * fscale);
         // Wide enough to read sender + content + actions comfortably.
         widthBounds.set(board.id, { min: 20 });
       } else if (board.type === 'note') {
@@ -1507,6 +1510,7 @@ const handleImportBookmarks = async (folderId?: string) => {
                     onClick={() => {
                       setWidgetsOpen(false);
                       if (activeWorkspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) { showToast('Workspace full', 'error'); return; }
+                      if (activeWorkspace.boards.some((b) => b.type === 'volt')) { showToast('VOLT widget already added', 'info'); return; }
                       useWorkspaceStore.getState().addVoltBoard(activeWorkspace.id);
                     }}
                   >

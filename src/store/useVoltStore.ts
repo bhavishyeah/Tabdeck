@@ -36,18 +36,22 @@ const VOLT_SESSION_KEY = 'volt-widget-session';
 
 // ---------------------------------------------------------------------------
 // chrome.storage.local adapter for Supabase auth.
-// Supabase's storage interface is called synchronously on client init, so
-// getItem always returns null at construction time. The actual session
-// restore is done asynchronously by restoreSession() which calls setSession().
-// setItem / removeItem write to chrome.storage.local fire-and-forget.
+// Supabase fully supports an async (Promise-returning) storage interface, so
+// we back it directly with chrome.storage.local. This lets Supabase own the
+// entire session lifecycle — persistence, restore, and token refresh — with
+// no manual setSession juggling. The session survives new-tab opens and
+// extension reloads, and DB calls are always authorized with a fresh token.
 // ---------------------------------------------------------------------------
 const chromeStorageAdapter = {
-  getItem: (_key: string): string | null => null,
-  setItem: (key: string, value: string): void => {
-    void chrome.storage.local.set({ [key]: value });
+  getItem: async (key: string): Promise<string | null> => {
+    const result = await chrome.storage.local.get(key);
+    return (result[key] as string) ?? null;
   },
-  removeItem: (key: string): void => {
-    void chrome.storage.local.remove(key);
+  setItem: async (key: string, value: string): Promise<void> => {
+    await chrome.storage.local.set({ [key]: value });
+  },
+  removeItem: async (key: string): Promise<void> => {
+    await chrome.storage.local.remove(key);
   },
 };
 
@@ -125,6 +129,14 @@ interface VoltState {
   fetchTransfers: (maxItems?: number) => Promise<void>;
   deleteTransfer: (id: string) => Promise<void>;
   markDelivered: (id: string) => Promise<void>;
+  /** Save an incoming transfer into the user's VOLT vault (clips table), then dismiss it. Returns true on success. */
+  saveToVault: (transfer: VoltTransfer) => Promise<boolean>;
+  /** Search VOLT users by username (for the quick-send recipient picker). */
+  searchUsers: (query: string) => Promise<VoltProfile[]>;
+  /** Persist the chosen quick-send recipient so the background context menu can use it. */
+  setQuickRecipient: (recipient: VoltProfile | null) => Promise<void>;
+  /** Read the current quick-send recipient. */
+  getQuickRecipient: () => Promise<VoltProfile | null>;
   subscribeRealtime: (maxItems?: number) => () => void;
   /** Remove an item from local state immediately (optimistic) */
   removeLocal: (id: string) => void;
@@ -179,57 +191,24 @@ export const useVoltStore = create<VoltState>((set, get) => ({
   transfers: [],
 
   // ── Session restore (called on widget mount) ──────────────────────────────
+  // Supabase persists the session to chrome.storage.local via the async
+  // storage adapter, so getSession() transparently reads + refreshes it.
   restoreSession: async () => {
     set({ authState: 'loading', authError: null });
     try {
       const client = getVoltClient();
 
-      // Read the raw tokens we stored in chrome.storage.local
-      const stored = await chrome.storage.local.get(VOLT_SESSION_KEY);
-      const raw = stored[VOLT_SESSION_KEY] as string | undefined;
+      const { data, error } = await client.auth.getSession();
 
-      if (!raw) {
-        // Nothing stored — first-time user or explicitly signed out
+      if (error || !data.session?.user) {
+        // No valid session stored — first-time user or signed out
         set({ authState: 'unauthenticated' });
         return;
       }
 
-      let parsed: { access_token: string; refresh_token: string };
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        // Corrupted entry — clear and show sign-in
-        void chrome.storage.local.remove(VOLT_SESSION_KEY);
-        set({ authState: 'unauthenticated' });
-        return;
-      }
-
-      const { data, error } = await client.auth.setSession({
-        access_token: parsed.access_token,
-        refresh_token: parsed.refresh_token,
-      });
-
-      if (error || !data.user) {
-        // Tokens expired and couldn't be refreshed — clear and show sign-in
-        void chrome.storage.local.remove(VOLT_SESSION_KEY);
-        set({ authState: 'unauthenticated' });
-        return;
-      }
-
-      // Persist the (possibly refreshed) tokens back to storage
-      const { data: sessionData } = await client.auth.getSession();
-      if (sessionData.session) {
-        void chrome.storage.local.set({
-          [VOLT_SESSION_KEY]: JSON.stringify({
-            access_token: sessionData.session.access_token,
-            refresh_token: sessionData.session.refresh_token,
-          }),
-        });
-      }
-
-      const profile = await fetchProfile(client, data.user.id);
+      const profile = await fetchProfile(client, data.session.user.id);
       if (!profile) {
-        void chrome.storage.local.remove(VOLT_SESSION_KEY);
+        await client.auth.signOut();
         set({ authState: 'unauthenticated' });
         return;
       }
@@ -255,15 +234,8 @@ export const useVoltStore = create<VoltState>((set, get) => ({
         return;
       }
 
-      // Persist the session tokens so the next page load can restore silently
-      if (data.session) {
-        void chrome.storage.local.set({
-          [VOLT_SESSION_KEY]: JSON.stringify({
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-          }),
-        });
-      }
+      // Supabase persists the session automatically via the storage adapter —
+      // no manual token handling needed.
 
       // Fetch the user's VOLT profile (username, display_name)
       const profile = await fetchProfile(client, data.user.id);
@@ -271,7 +243,6 @@ export const useVoltStore = create<VoltState>((set, get) => ({
         // Authenticated but no VOLT profile — user exists in auth but hasn't
         // completed VOLT onboarding. Treat as unauthenticated for our purposes.
         await client.auth.signOut();
-        void chrome.storage.local.remove(VOLT_SESSION_KEY);
         set({
           authState: 'unauthenticated',
           authError: 'No VOLT profile found for this account.',
@@ -367,6 +338,94 @@ export const useVoltStore = create<VoltState>((set, get) => ({
     }
   },
 
+  // ── Save to Vault ─────────────────────────────────────────────────────────
+  // Maps a transfer to a clips row (matching VOLT's own transferToClip shape)
+  // and inserts it into the user's vault, then marks the transfer delivered.
+  // This completes the RECEIVE → SEE → ACT loop: content received via VOLT
+  // can be kept permanently in the vault straight from FRONTLY.
+  saveToVault: async (transfer) => {
+    const { currentUser } = get();
+    if (!currentUser) return false;
+
+    try {
+      const client = getVoltClient();
+
+      // Build the clip payload. File-backed types carry a Cloudinary metadata
+      // descriptor; text/link store their value in `content`.
+      const isFileType =
+        transfer.type === 'image' || transfer.type === 'file' || transfer.type === 'audio';
+
+      const clipRow: Record<string, unknown> = {
+        user_id: currentUser.id,
+        type: transfer.type,
+        content: isFileType ? null : transfer.content,
+        source_device: 'web',
+      };
+
+      if (isFileType && transfer.file_url) {
+        clipRow.metadata = {
+          provider: 'cloudinary',
+          secure_url: transfer.file_url,
+          name: transfer.file_name ?? undefined,
+          bytes: transfer.file_size ?? undefined,
+          mime: transfer.mime_type ?? undefined,
+        };
+      }
+
+      const { error } = await client.from('clips').insert(clipRow);
+      if (error) return false;
+
+      // Dismiss the transfer now that it's saved (mirrors VOLT's behavior).
+      await get().markDelivered(transfer.id);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  // ── Quick-send recipient (for the FRONTLY → VOLT context menu) ─────────────
+  searchUsers: async (query) => {
+    const q = query.trim();
+    if (q.length < 2) return [];
+    const { currentUser } = get();
+    try {
+      const client = getVoltClient();
+      const { data } = await client
+        .from('profiles')
+        .select('id, username, display_name, avatar_url')
+        .ilike('username', `%${q}%`)
+        .limit(8);
+      const results = (data ?? []) as VoltProfile[];
+      // Exclude the current user from their own recipient list
+      return results.filter((p) => p.id !== currentUser?.id);
+    } catch {
+      return [];
+    }
+  },
+
+  setQuickRecipient: async (recipient) => {
+    // Stored under the same key the background service worker reads.
+    if (recipient) {
+      await chrome.storage.local.set({
+        'volt-quick-recipient': JSON.stringify({ id: recipient.id, username: recipient.username }),
+      });
+    } else {
+      await chrome.storage.local.remove('volt-quick-recipient');
+    }
+  },
+
+  getQuickRecipient: async () => {
+    const stored = await chrome.storage.local.get('volt-quick-recipient');
+    const raw = stored['volt-quick-recipient'] as string | undefined;
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { id: string; username: string };
+      return { id: parsed.id, username: parsed.username, display_name: null, avatar_url: null };
+    } catch {
+      return null;
+    }
+  },
+
   removeLocal: (id) => {
     set((state) => ({ transfers: state.transfers.filter((t) => t.id !== id) }));
   },
@@ -379,8 +438,12 @@ export const useVoltStore = create<VoltState>((set, get) => ({
     const client = getVoltClient();
     let channel: RealtimeChannel | null = null;
 
+    // Unique channel name per subscription so remounts (React StrictMode,
+    // navigation) never collide on the same channel name.
+    const channelName = `volt-widget-${currentUser.id}-${Date.now()}`;
+
     channel = client
-      .channel(`volt-widget-transfers-${currentUser.id}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {

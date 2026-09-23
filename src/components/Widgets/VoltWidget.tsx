@@ -128,12 +128,14 @@ function VoltSignIn({ onSignIn }: { onSignIn: (email: string, password: string) 
 // ---------------------------------------------------------------------------
 // Loading skeleton
 // ---------------------------------------------------------------------------
-function VoltLoadingState() {
+function VoltLoadingState({ showBadge = true }: { showBadge?: boolean }) {
   return (
     <div className="f-volt-loading" aria-label="Loading VOLT transfers">
-      <div className="f-volt-loading-header">
-        <VoltBadge />
-      </div>
+      {showBadge && (
+        <div className="f-volt-loading-header">
+          <VoltBadge />
+        </div>
+      )}
       {[1, 2, 3].map((i) => (
         <div key={i} className="f-volt-skeleton-card">
           <div className="f-volt-skeleton f-volt-skeleton--sender" />
@@ -151,7 +153,6 @@ function VoltLoadingState() {
 function VoltErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="f-volt-state f-volt-state--error">
-      <VoltBadge />
       <p className="f-volt-state-text">Couldn't connect right now.</p>
       <p className="f-volt-state-detail">{message}</p>
       <button className="f-volt-retry" type="button" onClick={onRetry}>
@@ -164,11 +165,10 @@ function VoltErrorState({ message, onRetry }: { message: string; onRetry: () => 
 // ---------------------------------------------------------------------------
 // Empty state
 // ---------------------------------------------------------------------------
-function VoltEmptyState({ username }: { username?: string }) {
+function VoltEmptyState() {
   return (
     <div className="f-volt-state f-volt-state--empty">
-      <VoltBadge />
-      <p className="f-volt-state-text">You're all caught up{username ? `, @${username}` : ''}.</p>
+      <p className="f-volt-state-text">You're all caught up.</p>
       <p className="f-volt-state-detail">Send something from another device or receive from a VOLT user.</p>
     </div>
   );
@@ -198,6 +198,62 @@ function useCopied() {
 }
 
 // ---------------------------------------------------------------------------
+// Save-to-vault feedback hook
+// Tracks per-item state: 'saving' while the insert is in flight, 'saved' on
+// success (briefly, before the item is dismissed). Delegates the actual work
+// to the store's saveToVault action.
+// ---------------------------------------------------------------------------
+function useSaveToVault() {
+  const saveToVault = useVoltStore((s) => s.saveToVault);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+
+  const save = useCallback(
+    async (transfer: VoltTransfer) => {
+      if (savingId) return; // ignore double-clicks
+      setSavingId(transfer.id);
+      const ok = await saveToVault(transfer);
+      setSavingId(null);
+      if (ok) {
+        // Show the saved checkmark briefly. The store dismisses the transfer
+        // (markDelivered) so the item will animate out shortly after.
+        setSavedId(transfer.id);
+      }
+    },
+    [saveToVault, savingId]
+  );
+
+  return { savingId, savedId, save };
+}
+
+/** Small shared Save button used by every item type. */
+function SaveButton({
+  transfer,
+  savingId,
+  savedId,
+  onSave,
+}: {
+  transfer: VoltTransfer;
+  savingId: string | null;
+  savedId: string | null;
+  onSave: (transfer: VoltTransfer) => void;
+}) {
+  const saving = savingId === transfer.id;
+  const saved = savedId === transfer.id;
+  return (
+    <button
+      className={`f-volt-action f-volt-action--save ${saved ? 'is-saved' : ''}`}
+      type="button"
+      onClick={() => onSave(transfer)}
+      disabled={saving || saved}
+      title="Save to VOLT vault"
+    >
+      {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save'}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Text item
 // ---------------------------------------------------------------------------
 function VoltTextItem({
@@ -207,6 +263,9 @@ function VoltTextItem({
   onDelete,
   copiedId,
   onCopy,
+  savingId,
+  savedId,
+  onSave,
 }: {
   transfer: VoltTransfer;
   showSender: boolean;
@@ -214,6 +273,9 @@ function VoltTextItem({
   onDelete: (id: string) => void;
   copiedId: string | null;
   onCopy: (id: string, text: string) => void;
+  savingId: string | null;
+  savedId: string | null;
+  onSave: (transfer: VoltTransfer) => void;
 }) {
   const copied = copiedId === transfer.id;
   return (
@@ -231,6 +293,7 @@ function VoltTextItem({
       </div>
       <p className="f-volt-item-text">{transfer.content}</p>
       <div className="f-volt-item-actions">
+        <SaveButton transfer={transfer} savingId={savingId} savedId={savedId} onSave={onSave} />
         <button
           className={`f-volt-action f-volt-action--copy ${copied ? 'is-copied' : ''}`}
           type="button"
@@ -262,6 +325,9 @@ function VoltLinkItem({
   onDelete,
   copiedId,
   onCopy,
+  savingId,
+  savedId,
+  onSave,
 }: {
   transfer: VoltTransfer;
   showSender: boolean;
@@ -269,6 +335,9 @@ function VoltLinkItem({
   onDelete: (id: string) => void;
   copiedId: string | null;
   onCopy: (id: string, text: string) => void;
+  savingId: string | null;
+  savedId: string | null;
+  onSave: (transfer: VoltTransfer) => void;
 }) {
   const copied = copiedId === transfer.id;
   const url = transfer.content ?? '';
@@ -309,6 +378,7 @@ function VoltLinkItem({
         >
           Open
         </a>
+        <SaveButton transfer={transfer} savingId={savingId} savedId={savedId} onSave={onSave} />
         <button
           className={`f-volt-action f-volt-action--copy ${copied ? 'is-copied' : ''}`}
           type="button"
@@ -338,11 +408,17 @@ function VoltImageItem({
   showSender,
   showTimestamps,
   onDelete,
+  savingId,
+  savedId,
+  onSave,
 }: {
   transfer: VoltTransfer;
   showSender: boolean;
   showTimestamps: boolean;
   onDelete: (id: string) => void;
+  savingId: string | null;
+  savedId: string | null;
+  onSave: (transfer: VoltTransfer) => void;
 }) {
   const [imgError, setImgError] = useState(false);
   const url = transfer.file_url ?? '';
@@ -390,6 +466,7 @@ function VoltImageItem({
         >
           Open
         </a>
+        <SaveButton transfer={transfer} savingId={savingId} savedId={savedId} onSave={onSave} />
         <button
           className="f-volt-action f-volt-action--delete"
           type="button"
@@ -411,11 +488,17 @@ function VoltFileItem({
   showSender,
   showTimestamps,
   onDelete,
+  savingId,
+  savedId,
+  onSave,
 }: {
   transfer: VoltTransfer;
   showSender: boolean;
   showTimestamps: boolean;
   onDelete: (id: string) => void;
+  savingId: string | null;
+  savedId: string | null;
+  onSave: (transfer: VoltTransfer) => void;
 }) {
   const url = transfer.file_url ?? '';
   const isAudio = transfer.type === 'audio';
@@ -456,6 +539,7 @@ function VoltFileItem({
             {isAudio ? 'Open' : 'Download'}
           </a>
         )}
+        <SaveButton transfer={transfer} savingId={savingId} savedId={savedId} onSave={onSave} />
         <button
           className="f-volt-action f-volt-action--delete"
           type="button"
@@ -481,6 +565,7 @@ function VoltItemList({
 }) {
   const { deleteTransfer } = useVoltStore();
   const { copiedId, copy } = useCopied();
+  const { savingId, savedId, save } = useSaveToVault();
 
   // Apply type filters from config
   const visible = transfers.filter((t) => {
@@ -503,6 +588,19 @@ function VoltItemList({
           onDelete: deleteTransfer,
           copiedId,
           onCopy: copy,
+          savingId,
+          savedId,
+          onSave: save,
+        };
+
+        const fileProps = {
+          transfer,
+          showSender: config.showSender,
+          showTimestamps: config.showTimestamps,
+          onDelete: deleteTransfer,
+          savingId,
+          savedId,
+          onSave: save,
         };
 
         switch (transfer.type) {
@@ -511,10 +609,10 @@ function VoltItemList({
           case 'link':
             return <VoltLinkItem key={transfer.id} {...commonProps} />;
           case 'image':
-            return <VoltImageItem key={transfer.id} transfer={transfer} showSender={config.showSender} showTimestamps={config.showTimestamps} onDelete={deleteTransfer} />;
+            return <VoltImageItem key={transfer.id} {...fileProps} />;
           case 'file':
           case 'audio':
-            return <VoltFileItem key={transfer.id} transfer={transfer} showSender={config.showSender} showTimestamps={config.showTimestamps} onDelete={deleteTransfer} />;
+            return <VoltFileItem key={transfer.id} {...fileProps} />;
           default:
             return null;
         }
@@ -666,7 +764,7 @@ export function VoltWidget({ config }: Props) {
 
       <VoltNewBadge visible={showNewBadge} />
 
-      {dataState === 'loading' && <VoltLoadingState />}
+      {dataState === 'loading' && <VoltLoadingState showBadge={false} />}
 
       {dataState === 'error' && (
         <VoltErrorState
@@ -676,7 +774,7 @@ export function VoltWidget({ config }: Props) {
       )}
 
       {dataState === 'ready' && transfers.length === 0 && (
-        <VoltEmptyState username={currentUser?.username} />
+        <VoltEmptyState />
       )}
 
       {dataState === 'ready' && transfers.length > 0 && (

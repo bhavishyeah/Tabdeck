@@ -15,6 +15,7 @@ import { ClockWidget } from '../Widgets/ClockWidget';
 import { TimerWidget } from '../Widgets/TimerWidget';
 import { RssWidget } from '../Widgets/RssWidget';
 import { VoltWidget } from '../Widgets/VoltWidget';
+import { useVoltStore } from '../../store/useVoltStore';
 import { DateTimePicker } from '../UI/DateTimePicker';
 import { Autocomplete } from '../UI/Autocomplete';
 import { searchTimezones } from '../../lib/timezones';
@@ -580,59 +581,13 @@ export function Board({ workspaceId, board, workspaces }: Props) {
 
       {widgetConfigOpen && board.type === 'volt' &&
         createPortal(
-          <div
-            ref={widgetPopRef}
-            className="f-widget-config-pop"
-            style={{ position: 'fixed', top: widgetConfigPos.top, left: widgetConfigPos.left }}
-          >
-            <div className="f-wc-row">
-              <span className="f-wc-label">Items to show</span>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                className="f-wc-input f-wc-input--sm"
-                defaultValue={board.voltConfig?.maxItems ?? 5}
-                onBlur={(e) => setVoltConfig(workspaceId, board.id, { maxItems: Math.min(20, Math.max(1, Number(e.target.value) || 5)) })}
-              />
-            </div>
-            <div className="f-wc-row">
-              <span className="f-wc-label">Show sender</span>
-              <button
-                type="button"
-                className={`f-toggle ${(board.voltConfig?.showSender ?? true) ? 'is-on' : ''}`}
-                onClick={() => setVoltConfig(workspaceId, board.id, { showSender: !(board.voltConfig?.showSender ?? true) })}
-                aria-label="Toggle sender"
-              ><span className="f-toggle-knob" /></button>
-            </div>
-            <div className="f-wc-row">
-              <span className="f-wc-label">Timestamps</span>
-              <button
-                type="button"
-                className={`f-toggle ${(board.voltConfig?.showTimestamps ?? true) ? 'is-on' : ''}`}
-                onClick={() => setVoltConfig(workspaceId, board.id, { showTimestamps: !(board.voltConfig?.showTimestamps ?? true) })}
-                aria-label="Toggle timestamps"
-              ><span className="f-toggle-knob" /></button>
-            </div>
-            <div className="td-context-divider" style={{ margin: '6px 0' }} />
-            <div className="f-wc-label" style={{ marginBottom: 4 }}>Content types</div>
-            {([
-              ['showText', 'Text'] as const,
-              ['showLinks', 'Links'] as const,
-              ['showImages', 'Images'] as const,
-              ['showFiles', 'Files'] as const,
-            ]).map(([key, label]) => (
-              <div key={key} className="f-wc-row">
-                <span className="f-wc-label">{label}</span>
-                <button
-                  type="button"
-                  className={`f-toggle ${(board.voltConfig?.[key] ?? true) ? 'is-on' : ''}`}
-                  onClick={() => setVoltConfig(workspaceId, board.id, { [key]: !(board.voltConfig?.[key] ?? true) })}
-                  aria-label={`Toggle ${label}`}
-                ><span className="f-toggle-knob" /></button>
-              </div>
-            ))}
-          </div>,
+          <VoltConfigPopover
+            popRef={widgetPopRef}
+            pos={widgetConfigPos}
+            workspaceId={workspaceId}
+            board={board}
+            setVoltConfig={setVoltConfig}
+          />,
           document.body
         )
       }
@@ -946,14 +901,16 @@ export function Board({ workspaceId, board, workspaces }: Props) {
                 />
               ))}
             </div>
-            <button
-              className="td-link-context-item"
-              type="button"
-              onClick={handleDuplicate}
-            >
-              <Copy size={13} strokeWidth={2} />
-              <span>Duplicate board</span>
-            </button>
+            {board.type !== 'volt' && (
+              <button
+                className="td-link-context-item"
+                type="button"
+                onClick={handleDuplicate}
+              >
+                <Copy size={13} strokeWidth={2} />
+                <span>Duplicate board</span>
+              </button>
+            )}
             {(!board.type || board.type === 'links') && board.links.length > 0 && (
               <button
                 className="td-link-context-item"
@@ -993,5 +950,129 @@ export function Board({ workspaceId, board, workspaces }: Props) {
           document.body
         )}
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// VOLT config popover
+//
+// Split into its own component because it needs local async state for the
+// quick-send recipient picker (searched against VOLT's profiles table and
+// persisted to chrome.storage.local so the background "Send to VOLT" context
+// menu can read it).
+// ---------------------------------------------------------------------------
+function VoltConfigPopover({
+  popRef,
+  pos,
+  workspaceId,
+  board,
+  setVoltConfig,
+}: {
+  popRef: React.RefObject<HTMLDivElement | null>;
+  pos: { top: number; left: number };
+  workspaceId: string;
+  board: BoardItem;
+  setVoltConfig: (workspaceId: string, boardId: string, config: import('../../lib/workspaceTypes').VoltConfig) => void;
+}) {
+  const authState = useVoltStore((s) => s.authState);
+  const searchUsers = useVoltStore((s) => s.searchUsers);
+  const setQuickRecipient = useVoltStore((s) => s.setQuickRecipient);
+  const getQuickRecipient = useVoltStore((s) => s.getQuickRecipient);
+
+  const [recipientLabel, setRecipientLabel] = useState('');
+
+  // Load the saved recipient once when the popover opens
+  useEffect(() => {
+    let active = true;
+    getQuickRecipient().then((r) => {
+      if (active && r) setRecipientLabel(`@${r.username}`);
+    });
+    return () => { active = false; };
+  }, [getQuickRecipient]);
+
+  return (
+    <div
+      ref={popRef}
+      className="f-widget-config-pop"
+      style={{ position: 'fixed', top: pos.top, left: pos.left }}
+    >
+      <div className="f-wc-row">
+        <span className="f-wc-label">Items to show</span>
+        <input
+          type="number"
+          min={1}
+          max={20}
+          className="f-wc-input f-wc-input--sm"
+          defaultValue={board.voltConfig?.maxItems ?? 5}
+          onBlur={(e) => setVoltConfig(workspaceId, board.id, { maxItems: Math.min(20, Math.max(1, Number(e.target.value) || 5)) })}
+        />
+      </div>
+      <div className="f-wc-row">
+        <span className="f-wc-label">Show sender</span>
+        <button
+          type="button"
+          className={`f-toggle ${(board.voltConfig?.showSender ?? true) ? 'is-on' : ''}`}
+          onClick={() => setVoltConfig(workspaceId, board.id, { showSender: !(board.voltConfig?.showSender ?? true) })}
+          aria-label="Toggle sender"
+        ><span className="f-toggle-knob" /></button>
+      </div>
+      <div className="f-wc-row">
+        <span className="f-wc-label">Timestamps</span>
+        <button
+          type="button"
+          className={`f-toggle ${(board.voltConfig?.showTimestamps ?? true) ? 'is-on' : ''}`}
+          onClick={() => setVoltConfig(workspaceId, board.id, { showTimestamps: !(board.voltConfig?.showTimestamps ?? true) })}
+          aria-label="Toggle timestamps"
+        ><span className="f-toggle-knob" /></button>
+      </div>
+
+      <div className="td-context-divider" style={{ margin: '6px 0' }} />
+      <div className="f-wc-label" style={{ marginBottom: 4 }}>Content types</div>
+      {([
+        ['showText', 'Text'] as const,
+        ['showLinks', 'Links'] as const,
+        ['showImages', 'Images'] as const,
+        ['showFiles', 'Files'] as const,
+      ]).map(([key, label]) => (
+        <div key={key} className="f-wc-row">
+          <span className="f-wc-label">{label}</span>
+          <button
+            type="button"
+            className={`f-toggle ${(board.voltConfig?.[key] ?? true) ? 'is-on' : ''}`}
+            onClick={() => setVoltConfig(workspaceId, board.id, { [key]: !(board.voltConfig?.[key] ?? true) })}
+            aria-label={`Toggle ${label}`}
+          ><span className="f-toggle-knob" /></button>
+        </div>
+      ))}
+
+      <div className="td-context-divider" style={{ margin: '6px 0' }} />
+      <div className="f-wc-row f-wc-row--stack">
+        <span className="f-wc-label">Quick-send contact</span>
+        {authState === 'authenticated' ? (
+          <>
+            <Autocomplete
+              initialText={recipientLabel}
+              placeholder="Search VOLT username"
+              getOptions={async (q) => {
+                const users = await searchUsers(q);
+                return users.map((u) => ({
+                  value: u.id,
+                  label: `@${u.username}`,
+                  sublabel: u.display_name ?? undefined,
+                }));
+              }}
+              onSelect={(opt) => {
+                const username = opt.label.replace(/^@/, '');
+                setQuickRecipient({ id: opt.value, username, display_name: null, avatar_url: null });
+                setRecipientLabel(opt.label);
+              }}
+            />
+            <div className="f-wc-hint">Right-click any page, link, or text → “Send to VOLT” sends it here.</div>
+          </>
+        ) : (
+          <div className="f-wc-hint">Connect your VOLT account to set a quick-send contact.</div>
+        )}
+      </div>
+    </div>
   );
 }

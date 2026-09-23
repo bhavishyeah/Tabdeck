@@ -46,6 +46,7 @@ export default defineManifest({
     'notifications',
     'identity',
     'identity.email',
+    'contextMenus',
   ],
 
   // Needed so the RSS widget can fetch arbitrary user-supplied feed URLs

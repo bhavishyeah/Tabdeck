@@ -254,6 +254,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           workspaces: state.workspaces.map((workspace) => {
             if (workspace.id !== workspaceId) return workspace;
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
+            // VOLT is a singleton — only one inbox widget per workspace.
+            if (workspace.boards.some((b) => b.type === 'volt')) return workspace;
             const base = placeNewBoard(workspace.boards.length);
             // VOLT widget works best at medium width — enough to read content
             const layout = { ...base, w: Math.min(28, Math.max(22, base.w)) };
@@ -288,6 +290,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             if (workspace.boards.length >= MAX_BOARDS_PER_WORKSPACE) return workspace;
             const board = workspace.boards.find((b) => b.id === boardId);
             if (!board) return workspace;
+            // VOLT is a singleton inbox — a second instance would share the
+            // same global store and create a conflicting realtime channel.
+            if (board.type === 'volt') return workspace;
             const duplicate = {
               ...board,
               id: uid(),

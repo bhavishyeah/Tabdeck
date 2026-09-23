@@ -4404,6 +4404,27 @@ a:focus:not(:focus-visible) {
   color: #16a34a;
 }
 
+/* Save to vault — the primary "keep it" action */
+.f-volt-action--save {
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.14);
+  font-weight: 700;
+}
+
+.f-volt-action--save:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.24);
+}
+
+.f-volt-action--save:disabled {
+  cursor: default;
+}
+
+.f-volt-action--save.is-saved {
+  border-color: rgba(22, 163, 74, 0.3);
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+}
+
 .f-volt-action--delete {
   opacity: 0;
   transition: opacity var(--f-duration-fast) var(--f-ease),
@@ -4426,11 +4447,17 @@ a:focus:not(:focus-visible) {
 .f-volt-signin {
   display: flex;
   flex-direction: column;
-  gap: var(--f-space-3);
+  gap: var(--f-space-2);
   flex: 1;
   justify-content: center;
-  padding: var(--f-space-1) 0;
+  /* Horizontal padding gives the input focus border room to render without
+     being clipped by overflow. */
+  padding: var(--f-space-1) 2px;
+  min-height: 0;
+  overflow-y: auto;
 }
+
+.f-volt-signin::-webkit-scrollbar { display: none; }
 
 .f-volt-signin-header {
   display: flex;
