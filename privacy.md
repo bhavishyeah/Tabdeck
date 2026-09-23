@@ -49,7 +49,9 @@ When you save links, the extension fetches favicon icons using **Google's Favico
 If you configure an RSS widget, the extension fetches the RSS feed directly from the URL you provide. The request goes from your browser to that feed's server. No personal data is included in the request.
 
 ### VOLT Widget (optional)
-If you use the VOLT widget and sign in with your VOLT credentials, the extension connects to VOLT's backend (hosted on Supabase) to display your incoming transfers. Your VOLT email and password are sent only to authenticate. The session is kept **in memory only** — it is never written to disk or any persistent storage, and is cleared when you close or reload the tab.
+If you use the VOLT widget and sign in with your VOLT credentials, the extension connects to VOLT's backend (hosted on Supabase) to display your incoming transfers. Your VOLT email and password are sent only to authenticate.
+
+To keep you signed in across new tabs and extension reloads, your VOLT session tokens (access and refresh tokens) are stored on your device in `chrome.storage.local`. These tokens stay on your device, are refreshed automatically, and are removed when you sign out of the VOLT widget. Your password is never stored — only the session tokens issued after login.
 
 ---
 
@@ -76,7 +78,7 @@ Frontly does **not** use any analytics, telemetry, tracking pixels, crash report
 
 ## 6. Data Retention and Deletion
 
-All locally stored data (boards, notes, todos, settings, wallpapers, backups) can be cleared at any time by removing the extension from Chrome. This permanently deletes all associated `chrome.storage.local`, `localStorage`, and IndexedDB data on your device.
+All locally stored data (boards, notes, todos, settings, wallpapers, backups, and VOLT session tokens) can be cleared at any time by removing the extension from Chrome. This permanently deletes all associated `chrome.storage.local`, `localStorage`, and IndexedDB data on your device. VOLT session tokens are also removed when you sign out of the VOLT widget.
 
 Synced data in `chrome.storage.sync` is managed by Google and is cleared when you remove the extension or sign out of Chrome Sync.
 
