@@ -487,6 +487,26 @@ async function insertVoltTransfer(
   }
 }
 
+/**
+ * Google Images search results give a wrapper URL as the image `srcUrl`,
+ * e.g. `https://www.google.com/imgres?q=...&imgurl=<real-image-url>&imgrefurl=...`.
+ * The genuine image lives in the `imgurl` query parameter. This unwraps it
+ * so we send the actual image, not Google's internal viewer link.
+ * Returns the input unchanged if it isn't a recognized wrapper.
+ */
+function unwrapImageUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith('google.com') && parsed.pathname === '/imgres') {
+      const real = parsed.searchParams.get('imgurl');
+      if (real) return real;
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 /** Extract the `sub` (user id) claim from a Supabase JWT without verifying it. */
 function decodeJwtSub(token: string): string | null {
   try {
@@ -570,24 +590,30 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
     payload = { type: 'text', content: info.selectionText.trim() };
   } else if (info.srcUrl) {
     // Images sent as a link to the source URL — but only if it's a real,
-    // shareable URL. Some pages (lazy-loaders, Google Lens overlays, canvas
-    // renders) expose a `data:` URI instead of a hosted URL. A base64 data
-    // URI can be megabytes long and is meaningless as a "link" on the
-    // receiving end, so we reject it with a clear message instead of
-    // silently sending garbage.
-    if (info.srcUrl.startsWith('data:')) {
+    // shareable URL.
+    //
+    // Google Images search results report their internal viewer URL
+    // (google.com/imgres?...&imgurl=<real image>&...) as srcUrl instead of
+    // the actual image file. Unwrap it to get the real image link.
+    const resolved = unwrapImageUrl(info.srcUrl);
+
+    // Some pages (lazy-loaders, Google Lens overlays, canvas renders) expose
+    // a `data:` URI instead of a hosted URL. A base64 data URI can be
+    // megabytes long and is meaningless as a "link" on the receiving end,
+    // so we reject it with a clear message instead of silently sending
+    // garbage.
+    if (resolved.startsWith('data:')) {
       await notify("Can't send this image — it has no direct URL. Try \"Copy image\" then paste manually, or right-click a different copy of the image.");
       return;
     }
-    // Some sites (notably Google Images search results) report a proxy/
-    // wrapper URL as the image src (e.g. google.com/imgres?...) rather than
-    // the actual image file. These are typically very long query strings.
-    // Warn instead of sending an unusable wall of text.
-    if (info.srcUrl.length > 500) {
+    // Last-resort guard: if unwrapping didn't help and the URL is still
+    // absurdly long, it's some other kind of wrapper/proxy we don't
+    // recognize. Better to warn than send an unusable wall of text.
+    if (resolved.length > 500) {
       await notify("This image's URL looks like a search-result wrapper, not a direct link. Open the image in a new tab first, then send it from there.");
       return;
     }
-    payload = { type: 'link', content: info.srcUrl };
+    payload = { type: 'link', content: resolved };
   } else if (info.linkUrl) {
     payload = { type: 'link', content: info.linkUrl };
   } else if (info.pageUrl) {
