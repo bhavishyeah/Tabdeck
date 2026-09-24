@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VoltConfig } from '../../lib/workspaceTypes';
 import { useVoltStore, type VoltTransfer } from '../../store/useVoltStore';
+import { unwrapLinkUrl, isLikelyWrapperUrl } from '../../lib/linkUnwrap';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -340,8 +341,47 @@ function VoltLinkItem({
   onSave: (transfer: VoltTransfer) => void;
 }) {
   const copied = copiedId === transfer.id;
-  const url = transfer.content ?? '';
-  const domain = extractDomain(url);
+  const rawUrl = transfer.content ?? '';
+  // Unwrap known wrapper/redirect links (Google Images, Facebook shims, etc.)
+  // so Open/Copy always act on the real destination — regardless of whether
+  // the link came from FRONTLY's own context menu or another VOLT client
+  // (e.g. a friend sending you a link from their phone).
+  const url = unwrapLinkUrl(rawUrl);
+  const wasUnwrapped = url !== rawUrl;
+  // If unwrapping didn't resolve it and it's still a raw data: URI or an
+  // unrecognized wrapper, there's nothing usable to open — show a plain
+  // fallback instead of dumping a huge blob of text into the card.
+  const isUnusable = isLikelyWrapperUrl(rawUrl) && url === rawUrl;
+  const domain = isUnusable ? null : extractDomain(url);
+
+  if (isUnusable) {
+    return (
+      <div className="f-volt-item f-volt-item--link">
+        <div className="f-volt-item-meta">
+          {showSender && (
+            <span className="f-volt-sender">@{transfer.sender_username ?? '…'}</span>
+          )}
+          {showTimestamps && (
+            <span className="f-volt-time">{relativeTime(transfer.created_at)}</span>
+          )}
+        </div>
+        <div className="f-volt-link-row">
+          <span className="f-volt-image-icon" aria-hidden="true">🔗</span>
+          <span className="f-volt-link-domain">Unrecognized link format</span>
+        </div>
+        <div className="f-volt-item-actions">
+          <button
+            className="f-volt-action f-volt-action--delete"
+            type="button"
+            onClick={() => onDelete(transfer.id)}
+            title="Delete"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="f-volt-item f-volt-item--link">
@@ -366,7 +406,14 @@ function VoltLinkItem({
           aria-hidden="true"
           loading="lazy"
         />
-        <span className="f-volt-link-domain">{domain}</span>
+        <span className="f-volt-link-domain" title={wasUnwrapped ? `Unwrapped from a redirect link` : url}>
+          {domain}
+        </span>
+        {wasUnwrapped && (
+          <span className="f-volt-unwrapped-badge" title="This was a redirect link — showing the real destination">
+            ↳ unwrapped
+          </span>
+        )}
       </div>
       <div className="f-volt-item-actions">
         <a

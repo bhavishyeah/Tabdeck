@@ -4287,6 +4287,16 @@ a:focus:not(:focus-visible) {
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0.85;
+  min-width: 0;
+}
+
+/* Shown when a redirect/wrapper link (Google Images, Facebook shim, etc.)
+   was unwrapped to its real destination — quiet, informational, not an error. */
+.f-volt-unwrapped-badge {
+  font-size: var(--f-micro-size);
+  opacity: 0.4;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ── Image preview ── */
