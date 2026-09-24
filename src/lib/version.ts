@@ -3,7 +3,7 @@
  * Bump APP_VERSION here (alongside manifest.config.ts + package.json) and add
  * a matching entry to WHATS_NEW so the panel shows once after an update.
  */
-export const APP_VERSION = '1.5.0';
+export const APP_VERSION = '2.1.0';
 
 export interface WhatsNewEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface WhatsNewEntry {
 
 /** Newest first. The panel shows entries newer than the user's last-seen version. */
 export const WHATS_NEW: WhatsNewEntry[] = [
+  {
+    version: '2.1.0',
+    title: "What's new in 2.1.0 — FRONTLY × VOLT",
+    items: [
+      'New: the ⚡ VOLT widget. Connect your VOLT account and see incoming transfers land on your homepage in real time.',
+      'Text, links, images, and files from VOLT — with Open, Copy, Save to vault, and Delete.',
+      '“Save to vault” keeps anything you receive permanently in your VOLT vault, right from FRONTLY.',
+      'Right-click any page, link, selection, or image → “Send to VOLT ⚡” to send it straight to a chosen contact.',
+      'Redirect/wrapper links (Google Images, Facebook, Bing, etc.) are automatically unwrapped to their real destination.',
+      'VOLT widget is fully customizable — item count, sender, timestamps, and content-type filters.',
+    ],
+  },
   {
     version: '1.5.0',
     title: "What's new in 1.5.0",

@@ -9,7 +9,7 @@ export default defineManifest({
   description:
   'Replace every new tab with a beautiful, customizable homepage for bookmarks, notes, tasks, and widgets.',
   
-  version: '1.4.0',
+  version: '2.1.0',
 
   chrome_url_overrides: {
     newtab: 'index.html',
