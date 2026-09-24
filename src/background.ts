@@ -560,16 +560,36 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
   }
 
   // 3. Build the payload from whatever context data is present.
-  // Priority: selected text > clicked link > clicked image > current page.
+  // Priority: selected text > clicked image > clicked link > current page.
+  // Images are checked before links because right-clicking an image inside
+  // an <a> tag gives Chrome both linkUrl AND srcUrl — the image is what the
+  // user actually meant to send.
   let payload: { type: 'text' | 'link'; content: string } | null = null;
 
   if (info.selectionText && info.selectionText.trim()) {
     payload = { type: 'text', content: info.selectionText.trim() };
+  } else if (info.srcUrl) {
+    // Images sent as a link to the source URL — but only if it's a real,
+    // shareable URL. Some pages (lazy-loaders, Google Lens overlays, canvas
+    // renders) expose a `data:` URI instead of a hosted URL. A base64 data
+    // URI can be megabytes long and is meaningless as a "link" on the
+    // receiving end, so we reject it with a clear message instead of
+    // silently sending garbage.
+    if (info.srcUrl.startsWith('data:')) {
+      await notify("Can't send this image — it has no direct URL. Try \"Copy image\" then paste manually, or right-click a different copy of the image.");
+      return;
+    }
+    // Some sites (notably Google Images search results) report a proxy/
+    // wrapper URL as the image src (e.g. google.com/imgres?...) rather than
+    // the actual image file. These are typically very long query strings.
+    // Warn instead of sending an unusable wall of text.
+    if (info.srcUrl.length > 500) {
+      await notify("This image's URL looks like a search-result wrapper, not a direct link. Open the image in a new tab first, then send it from there.");
+      return;
+    }
+    payload = { type: 'link', content: info.srcUrl };
   } else if (info.linkUrl) {
     payload = { type: 'link', content: info.linkUrl };
-  } else if (info.srcUrl) {
-    // Images are sent as a link to the image URL (no re-upload needed).
-    payload = { type: 'link', content: info.srcUrl };
   } else if (info.pageUrl) {
     payload = { type: 'link', content: info.pageUrl };
   }
